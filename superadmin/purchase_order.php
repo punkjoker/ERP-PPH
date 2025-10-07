@@ -1,4 +1,4 @@
-<?php
+<?php 
 include 'db_con.php';
 
 // Always define $id early (default 0)
@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $tax_percentage = floatval($_POST['tax_percentage'] ?? 0);
     $tax_amount = floatval($_POST['tax_amount'] ?? 0);
 
-    // ✅ Auto-generate PO number if blank
+    // Auto-generate PO number if blank
     if (empty($po_no)) {
         $res = $conn->query("SELECT MAX(po_no) as last_po FROM po_list");
         $row = $res->fetch_assoc();
@@ -23,11 +23,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($id > 0) {
-        // ✅ Update existing PO
+        // Update existing PO
         $stmt = $conn->prepare("UPDATE po_list 
             SET supplier_id=?, po_no=?, notes=?, status=?, discount_percentage=?, discount_amount=?, tax_percentage=?, tax_amount=? 
             WHERE id=?");
-        $stmt->bind_param("issidddii", 
+        $stmt->bind_param("issiddddi", 
             $supplier_id, $po_no, $notes, $status, 
             $discount_percentage, $discount_amount, 
             $tax_percentage, $tax_amount, $id
@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $conn->query("DELETE FROM order_items WHERE po_id = $id");
 
     } else {
-        // ✅ Insert new PO
+        // Insert new PO
         $stmt = $conn->prepare("INSERT INTO po_list 
             (supplier_id, po_no, notes, status, discount_percentage, discount_amount, tax_percentage, tax_amount) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
@@ -53,17 +53,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->close();
     }
 
-    // ✅ Insert items into order_items
+    // Insert items into order_items (manual_name replaces description)
     if (!empty($_POST['qty'])) {
         foreach ($_POST['qty'] as $i => $qty) {
             $qty = floatval($qty);
             $unit = $_POST['unit'][$i] ?? '';
             $unit_price = floatval($_POST['unit_price'][$i]);
 
-            // product_id from procurement_products OR null
             $product_id = !empty($_POST['product_id'][$i]) ? intval($_POST['product_id'][$i]) : null;
-            // manual name if not from product list
-            $manual_name = $_POST['manual_name'][$i] ?? null;
+            $manual_name = $_POST['manual_name'][$i] ?? null; // store manual item name
 
             $stmt = $conn->prepare("INSERT INTO order_items 
                 (po_id, product_id, manual_name, quantity, unit, unit_price) 
@@ -74,10 +72,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    header("Location: purchase_orders.php?success=1");
+    header("Location: approved_purchases.php?success=1");
     exit;
 }
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -125,87 +124,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <!-- Items Table -->
-        <div class="overflow-x-auto">
-            <table class="w-full border text-sm" id="item-list">
-                <thead class="bg-gray-100">
-                    <tr>
-                        <th class="p-2 text-center">Action</th>
-                        <th class="p-2 text-center">Qty</th>
-                        <th class="p-2 text-center">Unit</th>
-                        <th class="p-2 text-center">Item</th>
-                        <th class="p-2 text-center">Description</th>
-                        <th class="p-2 text-center">Price</th>
-                        <th class="p-2 text-center">Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if ($id > 0): 
-                        $order_items_qry = $conn->query("SELECT o.*, i.name, i.description 
-                            FROM order_items o 
-                            INNER JOIN item_list i ON o.item_id = i.id 
-                            WHERE o.po_id = '$id'");
-                        while ($row = $order_items_qry->fetch_assoc()): ?>
-                        <tr class="po-item border-b">
-                            <td class="p-2 text-center">
-                                <button type="button" onclick="rem_item(this)" 
-                                    class="bg-red-500 text-white px-2 py-1 rounded">X</button>
-                            </td>
-                            <td class="p-1">
-                                <input type="number" name="qty[]" value="<?= $row['quantity'] ?>" 
-                                    class="w-full border rounded p-1 text-center">
-                            </td>
-                            <td class="p-1">
-                                <input type="text" name="unit[]" value="<?= $row['unit'] ?>" 
-                                    class="w-full border rounded p-1 text-center">
-                            </td>
-                            <td class="p-1">
-                                <input type="hidden" name="item_id[]" value="<?= $row['item_id'] ?>">
-                                <input type="text" value="<?= $row['name'] ?>" 
-                                    class="w-full border rounded p-1 item_id">
-                            </td>
-                            <td class="p-1 item-description"><?= $row['description'] ?></td>
-                            <td class="p-1">
-                                <input type="number" step="0.01" name="unit_price[]" value="<?= $row['unit_price'] ?>" 
-                                    class="w-full border rounded p-1 text-right">
-                            </td>
-                            <td class="p-1 text-right total-price"><?= number_format($row['quantity'] * $row['unit_price'], 2) ?></td>
-                        </tr>
-                    <?php endwhile; endif; ?>
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="6" class="p-2 text-right font-semibold">Subtotal</td>
-                        <td class="p-2 text-right" id="sub_total">0</td>
-                    </tr>
-                    <tr>
-                        <td colspan="6" class="p-2 text-right">Discount (%) 
-                            <input type="number" step="any" name="discount_percentage" 
-                                value="<?= $discount_percentage ?? 0 ?>" class="w-20 border rounded p-1 text-right">
-                        </td>
-                        <td class="p-2">
-                            <input type="text" readonly name="discount_amount" 
-                                value="<?= $discount_amount ?? 0 ?>" class="w-full border-0 text-right">
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="6" class="p-2 text-right">Tax (%) 
-                            <input type="number" step="any" name="tax_percentage" 
-                                value="<?= $tax_percentage ?? 0 ?>" class="w-20 border rounded p-1 text-right">
-                        </td>
-                        <td class="p-2">
-                            <input type="text" readonly name="tax_amount" 
-                                value="<?= $tax_amount ?? 0 ?>" class="w-full border-0 text-right">
-                        </td>
-                    </tr>
-                    <tr class="bg-gray-200 font-semibold">
-                        <td colspan="6" class="p-2 text-right">Total</td>
-                        <td class="p-2 text-right" id="total">0</td>
-                    </tr>
-                </tfoot>
-            </table>
-            <button type="button" id="add_row" 
-                class="mt-2 bg-blue-500 text-white px-3 py-1 rounded">+ Add Row</button>
-        </div>
+<div class="overflow-x-auto">
+    <table class="w-full border text-sm" id="item-list">
+        <thead class="bg-gray-100">
+            <tr>
+                <th class="p-2 text-center">Action</th>
+                <th class="p-2 text-center">Qty</th>
+                <th class="p-2 text-center">Unit</th>
+                <th class="p-2 text-center">Item</th>
+                <th class="p-2 text-center">Price</th>
+                <th class="p-2 text-center">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php if ($id > 0): 
+                $order_items_qry = $conn->query("SELECT * FROM order_items WHERE po_id = '$id'");
+                while ($row = $order_items_qry->fetch_assoc()): ?>
+                <tr class="po-item border-b">
+                    <td class="p-2 text-center">
+                        <button type="button" onclick="rem_item(this)" 
+                            class="bg-red-500 text-white px-2 py-1 rounded">X</button>
+                    </td>
+                    <td class="p-1">
+                        <input type="number" name="qty[]" value="<?= $row['quantity'] ?>" class="w-full border rounded p-1 text-center">
+                    </td>
+                    <td class="p-1">
+                        <input type="text" name="unit[]" value="<?= $row['unit'] ?>" class="w-full border rounded p-1 text-center">
+                    </td>
+                    <td class="p-1">
+                        <input type="hidden" name="product_id[]" value="<?= $row['product_id'] ?>">
+                        <input type="text" name="manual_name[]" value="<?= $row['manual_name'] ?>" class="w-full border rounded p-1">
+                    </td>
+                    <td class="p-1">
+                        <input type="number" step="0.01" name="unit_price[]" value="<?= $row['unit_price'] ?>" class="w-full border rounded p-1 text-right">
+                    </td>
+                    <td class="p-1 text-right total-price"><?= number_format($row['quantity'] * $row['unit_price'], 2) ?></td>
+                </tr>
+            <?php endwhile; endif; ?>
+        </tbody>
+    </table>
+    <button type="button" id="add_row" class="mt-2 bg-blue-500 text-white px-3 py-1 rounded">+ Add Row</button>
+</div>
+
 
         <!-- Notes & Status -->
         <div class="grid grid-cols-2 gap-4">
@@ -226,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <!-- Buttons -->
         <div class="flex gap-4">
             <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded">Save</button>
-            <a href="purchase_orders.php" class="bg-gray-500 text-white px-4 py-2 rounded">Cancel</a>
+            <a href="purchase_order.php" class="bg-gray-500 text-white px-4 py-2 rounded">Cancel</a>
         </div>
     </form>
 </div>

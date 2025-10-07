@@ -30,8 +30,10 @@
         <li><a href="view_employees.php" class="block hover:bg-blue-200 p-2 rounded">View Employees</a></li>
         <li><a href="manage_leaves.php" class="block hover:bg-blue-200 p-2 rounded">Manage Leaves</a></li>
         <li><a href="manage_expenses.php" class="block hover:bg-blue-200 p-2 rounded">Add Expense</a></li>
-        <li><a href="add_lunch_expense.php" class="block hover:bg-blue-200 p-2 rounded">Add Lunch Expense</a></li>
+        <li><a href="add_lunch_expense.php" class="block hover:bg-blue-200 p-2 rounded">Lunch Expense</a></li>
+        <li><a href="breakfast_expense.php" class="block hover:bg-blue-200 p-2 rounded">Breakfast Expense</a></li>
         <li><a href="record_training.php" class="block hover:bg-blue-200 p-2 rounded">Record Training</a></li>
+        <li><a href="hr_report.php" class="block hover:bg-blue-200 p-2 rounded">HR Report</a></li>
       </ul>
     </div>
 
@@ -82,9 +84,9 @@
         <li><a href="add_procurement_product.php" class="block hover:bg-blue-200 p-2 rounded">Add Product</a></li>
         <li><a href="supplier_list.php" class="block hover:bg-blue-200 p-2 rounded">Supplier List</a></li>
         <li><a href="purchase_order.php" class="block hover:bg-blue-200 p-2 rounded">New Purchase</a></li>
-        <li><a href="approved_purchases.php" class="block hover:bg-blue-200 p-2 rounded">Approved Purchases</a></li>
-        <li><a href="purchase_list.php" class="block hover:bg-blue-200 p-2 rounded">Purchase List</a></li>
-        <li><a href="delivered_purchases.php" class="block hover:bg-blue-200 p-2 rounded">Delivered Purchases</a></li>
+        <li><a href="approved_purchases.php" class="block hover:bg-blue-200 p-2 rounded">Purchase List</a></li>
+       
+        <li><a href="delivered_purchases.php" class="block hover:bg-blue-200 p-2 rounded">Delivery Of Purchases</a></li>
       </ul>
     </div>
 
@@ -102,10 +104,13 @@
     <div>
       <h3 class="text-blue-700 font-semibold uppercase">Drivers</h3>
       <ul class="ml-4 space-y-2 text-sm">
-        <li><a href="pending_deliveries.php" class="block hover:bg-blue-200 p-2 rounded">Pending Deliveries</a></li>
+        <li><a href="add_vehicle.php" class="block hover:bg-blue-200 p-2 rounded">Manage vehicles</a></li>
+         <li><a href="pending_deliveries.php" class="block hover:bg-blue-200 p-2 rounded">Pending Deliveries</a></li>
         <li><a href="delivered.php" class="block hover:bg-blue-200 p-2 rounded">Delivered</a></li>
+        <li><a href="manage_trips.php" class="block hover:bg-blue-200 p-2 rounded">Manage Trips</a></li>
         <li><a href="vehicle_maintenance.php" class="block hover:bg-blue-200 p-2 rounded">Vehicle Maintenance Costs</a></li>
         <li><a href="fuel.php" class="block hover:bg-blue-200 p-2 rounded">Fuel Section</a></li>
+        <li><a href="vehicle_reports.php" class="block hover:bg-blue-200 p-2 rounded">Vehicles Report</a></li>
       </ul>
     </div>
 
