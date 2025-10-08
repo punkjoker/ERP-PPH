@@ -48,7 +48,7 @@
         <li><a href="view_finished_products.php" class="block hover:bg-blue-200 p-2 rounded">View Finished Products</a></li>
         <li><a href="view_inventory.php" class="block hover:bg-blue-200 p-2 rounded">View Inventory</a></li>
         <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded">New Item Request</a></li>
-        <li><a href="reports.php" class="block hover:bg-blue-200 p-2 rounded">Reports</a></li>
+        <li><a href="production_report.php" class="block hover:bg-blue-200 p-2 rounded">Reports</a></li>
       </ul>
     </div>
 
@@ -76,6 +76,7 @@
         <li><a href="stock_out.php" class="block hover:bg-blue-200 p-2 rounded">Stock Out</a></li>
         <li><a href="production_requests.php" class="block hover:bg-blue-200 p-2 rounded">Production Requests</a></li>
         <li><a href="view_inventory.php" class="block hover:bg-blue-200 p-2 rounded">View Inventory</a></li>
+         <li><a href="order_deliveries.php" class="block hover:bg-blue-200 p-2 rounded">Create Delivery</a></li>
         <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded">New Item Request</a></li>
         <li><a href="store_reports.php" class="block hover:bg-blue-200 p-2 rounded">Reports</a></li>
       </ul>
@@ -113,7 +114,7 @@
       <ul class="ml-4 space-y-2 text-sm">
         <li><a href="add_vehicle.php" class="block hover:bg-blue-200 p-2 rounded">Manage vehicles</a></li>
          <li><a href="pending_deliveries.php" class="block hover:bg-blue-200 p-2 rounded">Pending Deliveries</a></li>
-        <li><a href="delivered.php" class="block hover:bg-blue-200 p-2 rounded">Delivered</a></li>
+        <li><a href="delivered_orders.php" class="block hover:bg-blue-200 p-2 rounded">Delivered</a></li>
         <li><a href="manage_trips.php" class="block hover:bg-blue-200 p-2 rounded">Manage Trips</a></li>
         <li><a href="vehicle_maintenance.php" class="block hover:bg-blue-200 p-2 rounded">Vehicle Maintenance Costs</a></li>
         <li><a href="fuel.php" class="block hover:bg-blue-200 p-2 rounded">Fuel Section</a></li>

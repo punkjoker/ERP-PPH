@@ -25,11 +25,19 @@ if (!$bom) {
 }
 
 // Fetch BOM items (chemicals)
-$sql = "SELECT i.id, i.chemical_id, c.chemical_name, i.quantity_requested, 
-               i.unit, i.unit_price, i.total_cost
+$sql = "SELECT 
+            i.id, 
+            i.chemical_id, 
+            c.chemical_name, 
+            i.quantity_requested, 
+            i.unit, 
+            i.unit_price, 
+            i.total_cost,
+            i.rm_lot_no
         FROM bill_of_material_items i
         JOIN chemicals_in c ON i.chemical_id = c.id
         WHERE i.bom_id = ?";
+
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("i", $bom_id);
 $stmt->execute();
@@ -91,6 +99,7 @@ $stmt->close();
                     <thead class="bg-gray-200">
                         <tr>
                             <th class="border px-3 py-2 text-left">Chemical</th>
+                            <th class="border px-3 py-2 text-left">RM LOT NO</th>
                             <th class="border px-3 py-2 text-left">Qty Requested</th>
                             <th class="border px-3 py-2 text-left">Unit</th>
                             <th class="border px-3 py-2 text-left">Unit Price</th>
@@ -105,6 +114,7 @@ $stmt->close();
                         ?>
                         <tr>
                             <td class="border px-3 py-2"><?= htmlspecialchars($c['chemical_name']) ?></td>
+                            <td class="border px-3 py-2"><?= htmlspecialchars($c['rm_lot_no']) ?></td>
                             <td class="border px-3 py-2"><?= htmlspecialchars($c['quantity_requested']) ?></td>
                             <td class="border px-3 py-2"><?= htmlspecialchars($c['unit']) ?></td>
                             <td class="border px-3 py-2"><?= number_format($c['unit_price'], 2) ?></td>

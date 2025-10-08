@@ -162,11 +162,13 @@ if ($qc_status_query && $qc_status_query->num_rows > 0) {
         <button type="button" @click="packs.push({})" class="bg-blue-500 text-white px-3 py-1 rounded text-sm mb-4">+ Add Item</button>
 
         <!-- RM Lot Number Assignment -->
+         <!--
         <div class="mt-4">
-          <label for="rm_lot_no" class="block font-semibold text-gray-700 mb-2">Assign New RM LOT NO (Finished Product)</label>
+          <label for="rm_lot_no" class="block font-semibold text-gray-700 mb-2">RM LOT NO (Finished Product)</label>
           <input type="text" id="rm_lot_no" name="rm_lot_no" placeholder="Enter RM LOT NO..." class="border p-2 rounded w-full">
         </div>
       </div>
+      -->
 
       <!-- Manager Checklist -->
       <div class="bg-white p-6 rounded-lg shadow mb-6">

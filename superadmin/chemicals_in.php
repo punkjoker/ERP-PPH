@@ -5,6 +5,7 @@ require 'db_con.php';
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_chemical'])) {
     $name = trim($_POST['chemical_name']);
+    $batch_no = trim($_POST['batch_no']);
     $rm_lot_no = trim($_POST['rm_lot_no']);
     $std_qty = floatval($_POST['std_quantity']);
     $remaining_qty = $std_qty; // initially same as std qty
@@ -12,11 +13,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_chemical'])) {
     $unit_price = floatval($_POST['unit_price']);
     $date_added = $_POST['date_added'];
 
-    // insert with status = Pending
     $stmt = $conn->prepare("INSERT INTO chemicals_in 
-        (chemical_name, rm_lot_no, std_quantity, remaining_quantity, total_cost, unit_price, date_added, status) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending')");
-    $stmt->bind_param("ssiddds", $name, $rm_lot_no, $std_qty, $remaining_qty, $total_cost, $unit_price, $date_added);
+        (chemical_name, batch_no, rm_lot_no, std_quantity, remaining_quantity, total_cost, unit_price, date_added, status) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending')");
+    $stmt->bind_param("sssiddds", $name, $batch_no, $rm_lot_no, $std_qty, $remaining_qty, $total_cost, $unit_price, $date_added);
     $stmt->execute();
 }
 
@@ -32,7 +32,8 @@ if (!empty($from_date) && !empty($to_date)) {
                 AND '" . $conn->real_escape_string($to_date) . "'";
 }
 if (!empty($search_name)) {
-    $query .= " AND chemical_name LIKE '%" . $conn->real_escape_string($search_name) . "%'";
+    $query .= " AND (chemical_name LIKE '%" . $conn->real_escape_string($search_name) . "%' 
+                OR batch_no LIKE '%" . $conn->real_escape_string($search_name) . "%')";
 }
 
 $query .= " ORDER BY date_added DESC";
@@ -52,11 +53,16 @@ $chemicals = $conn->query($query);
 <div class="max-w-6xl ml-64 mx-auto mt-24 p-6 bg-white rounded-xl shadow-lg">
   <h2 class="text-2xl font-bold text-blue-700 mb-6 text-center">Chemicals In</h2>
 
-  <!-- Form -->
+  <!-- Add Chemical Form -->
   <form method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
     <div>
       <label class="block text-sm font-medium text-gray-700">Chemical Name</label>
       <input type="text" name="chemical_name" class="w-full border rounded px-3 py-2" required>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Batch No</label>
+      <input type="text" name="batch_no" class="w-full border rounded px-3 py-2" placeholder="e.g. BATCH-2025-001" required>
     </div>
 
     <div>
@@ -91,7 +97,7 @@ $chemicals = $conn->query($query);
     </div>
   </form>
 
-  <!-- Filters -->
+  <!-- Filter Section -->
   <form method="GET" class="flex flex-wrap gap-4 mb-4 items-end">
     <div>
       <label class="text-sm font-medium text-gray-700">From Date</label>
@@ -102,20 +108,21 @@ $chemicals = $conn->query($query);
       <input type="date" name="to_date" value="<?= htmlspecialchars($to_date) ?>" class="border rounded px-3 py-2">
     </div>
     <div>
-      <label class="text-sm font-medium text-gray-700">Search Chemical</label>
-      <input type="text" name="search_name" value="<?= htmlspecialchars($search_name) ?>" class="border rounded px-3 py-2" placeholder="Enter name">
+      <label class="text-sm font-medium text-gray-700">Search Chemical or Batch</label>
+      <input type="text" name="search_name" value="<?= htmlspecialchars($search_name) ?>" class="border rounded px-3 py-2" placeholder="Enter name or batch">
     </div>
     <div>
       <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Filter</button>
     </div>
   </form>
 
-  <!-- Table -->
+  <!-- Chemicals Table -->
   <div class="overflow-x-auto">
     <table class="w-full border text-sm">
       <thead class="bg-blue-100">
         <tr>
           <th class="border px-2 py-1">Chemical Name</th>
+          <th class="border px-2 py-1">Batch No</th>
           <th class="border px-2 py-1">RM LOT NO</th>
           <th class="border px-2 py-1">STD Quantity</th>
           <th class="border px-2 py-1">Remaining Quantity</th>
@@ -131,6 +138,7 @@ $chemicals = $conn->query($query);
           <?php while ($row = $chemicals->fetch_assoc()): ?>
             <tr>
               <td class="border px-2 py-1"><?= htmlspecialchars($row['chemical_name']) ?></td>
+              <td class="border px-2 py-1"><?= htmlspecialchars($row['batch_no']) ?></td>
               <td class="border px-2 py-1"><?= htmlspecialchars($row['rm_lot_no']) ?></td>
               <td class="border px-2 py-1"><?= $row['std_quantity'] ?></td>
               <td class="border px-2 py-1 text-green-700"><?= $row['remaining_quantity'] ?></td>
@@ -142,7 +150,7 @@ $chemicals = $conn->query($query);
                 <?= htmlspecialchars($row['status']) ?>
               </td>
               <td class="border px-2 py-1">
-                <button onclick="openEditModal(<?= $row['id'] ?>, '<?= htmlspecialchars($row['chemical_name']) ?>', '<?= htmlspecialchars($row['rm_lot_no']) ?>', <?= $row['std_quantity'] ?>, <?= $row['remaining_quantity'] ?>, <?= $row['total_cost'] ?>, <?= $row['unit_price'] ?>, '<?= $row['date_added'] ?>')" 
+                <button onclick="openEditModal(<?= $row['id'] ?>, '<?= htmlspecialchars($row['chemical_name']) ?>', '<?= htmlspecialchars($row['batch_no']) ?>', '<?= htmlspecialchars($row['rm_lot_no']) ?>', <?= $row['std_quantity'] ?>, <?= $row['remaining_quantity'] ?>, <?= $row['total_cost'] ?>, <?= $row['unit_price'] ?>, '<?= $row['date_added'] ?>')" 
                         class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs">
                   Edit
                 </button>
@@ -151,7 +159,7 @@ $chemicals = $conn->query($query);
           <?php endwhile; ?>
         <?php else: ?>
           <tr>
-            <td colspan="9" class="text-center text-gray-500 py-2">No chemicals found.</td>
+            <td colspan="10" class="text-center text-gray-500 py-2">No chemicals found.</td>
           </tr>
         <?php endif; ?>
       </tbody>
@@ -160,14 +168,18 @@ $chemicals = $conn->query($query);
 </div>
 
 <!-- Edit Modal -->
-<div id="editModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-  <div class="bg-white rounded-lg shadow-lg w-96 p-6">
+<div id="editModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center overflow-auto py-10">
+  <div class="bg-white rounded-lg shadow-lg w-96 p-6 max-h-[90vh] overflow-y-auto">
     <h3 class="text-lg font-bold mb-4">Edit Chemical</h3>
     <form method="POST" action="update_chemical.php" class="space-y-3">
       <input type="hidden" name="id" id="edit_id">
       <div>
         <label class="text-sm">Chemical Name</label>
         <input type="text" name="chemical_name" id="edit_name" class="w-full border rounded px-3 py-2" required>
+      </div>
+      <div>
+        <label class="text-sm">Batch No</label>
+        <input type="text" name="batch_no" id="edit_batch" class="w-full border rounded px-3 py-2" required>
       </div>
       <div>
         <label class="text-sm">RM LOT NO</label>
@@ -193,7 +205,7 @@ $chemicals = $conn->query($query);
         <label class="text-sm">Date Added</label>
         <input type="date" name="date_added" id="edit_date" class="w-full border rounded px-3 py-2" required>
       </div>
-      <div class="flex justify-end gap-2">
+      <div class="flex justify-end gap-2 mt-4">
         <button type="button" onclick="closeEditModal()" class="bg-gray-500 text-white px-4 py-2 rounded">Cancel</button>
         <button type="submit" name="update_chemical" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Update</button>
       </div>
@@ -202,9 +214,10 @@ $chemicals = $conn->query($query);
 </div>
 
 <script>
-function openEditModal(id, name, lot, std_qty, rem_qty, total, unit, date) {
+function openEditModal(id, name, batch, lot, std_qty, rem_qty, total, unit, date) {
   document.getElementById('edit_id').value = id;
   document.getElementById('edit_name').value = name;
+  document.getElementById('edit_batch').value = batch;
   document.getElementById('edit_lot').value = lot;
   document.getElementById('edit_std_qty').value = std_qty;
   document.getElementById('edit_rem_qty').value = rem_qty;

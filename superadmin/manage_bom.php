@@ -6,7 +6,14 @@ require 'db_con.php';
 $products = $conn->query("SELECT * FROM products ORDER BY name ASC")->fetch_all(MYSQLI_ASSOC);
 
 // Fetch chemicals in FIFO order
-$chemicals = $conn->query("SELECT id, chemical_name, remaining_quantity, unit_price FROM chemicals_in ORDER BY created_at ASC")->fetch_all(MYSQLI_ASSOC);
+// Fetch chemicals in FIFO order, exclude those with 0 remaining
+$chemicals = $conn->query("
+    SELECT id, chemical_name, rm_lot_no, remaining_quantity, unit_price 
+    FROM chemicals_in 
+    WHERE remaining_quantity > 0 
+    ORDER BY date_added ASC
+")->fetch_all(MYSQLI_ASSOC);
+
 
 // Handle BOM submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['product_id'])) {
@@ -28,21 +35,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['product_id'])) {
 
         // Insert BOM items
         foreach ($chemicals_selected as $chem) {
-            if (empty($chem['chemical_id']) || empty($chem['quantity_requested'])) continue;
+    if (empty($chem['chemical_id']) || empty($chem['quantity_requested'])) continue;
 
-            $chemical_id = intval($chem['chemical_id']);
-            $qty_requested = floatval($chem['quantity_requested']);
-            $qty_unit = $chem['unit'] ?? 'kg';
-            $unit_price = floatval($chem['unit_price']);
-            $total_cost = floatval($chem['total_cost']);
+    $chemical_id = intval($chem['chemical_id']);
+    $chemical_name = $chem['chemical_name'] ?? '';
+    $lot_no = $chem['rm_lot_no'] ?? '';
+    $qty_requested = floatval($chem['quantity_requested']);
+    $qty_unit = $chem['unit'] ?? 'kg';
+    $unit_price = floatval($chem['unit_price']);
+    $total_cost = floatval($chem['total_cost']);
 
-            $stmt = $conn->prepare("INSERT INTO bill_of_material_items 
-                (bom_id, chemical_id, quantity_requested, unit, unit_price, total_cost) 
-                VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("iidssd", $bom_id, $chemical_id, $qty_requested, $qty_unit, $unit_price, $total_cost);
-            $stmt->execute();
-            $stmt->close();
-        }
+    $stmt = $conn->prepare("INSERT INTO bill_of_material_items 
+    (bom_id, chemical_id, chemical_name, rm_lot_no, quantity_requested, unit, unit_price, total_cost) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+$stmt->bind_param("iissdsdd", $bom_id, $chemical_id, $chemical_name, $lot_no, $qty_requested, $qty_unit, $unit_price, $total_cost);
+
+    $stmt->execute();
+    $stmt->close();
+}
+
 
         $success = "BOM submitted successfully and is now pending approval.";
     } else {
@@ -116,13 +127,20 @@ function addChemicalRow() {
     chemicalIndex++;
 }
 
-        function fillChemicalData(select) {
-            let option = select.options[select.selectedIndex];
-            let row = select.closest('.chemical-row');
-            row.querySelector('.remaining').value = option.getAttribute('data-remaining');
-            row.querySelector('.unit-price').value = option.getAttribute('data-price');
-            updateTotal(row);
-        }
+       function fillChemicalData(select) {
+    let option = select.options[select.selectedIndex];
+    let row = select.closest('.chemical-row');
+
+    row.querySelector('.remaining').value = option.getAttribute('data-remaining');
+    row.querySelector('.unit-price').value = option.getAttribute('data-price');
+
+    // new: store name and lot
+    row.querySelector('.chemical-name').value = option.getAttribute('data-name');
+    row.querySelector('.lot-no').value = option.getAttribute('data-lot');
+
+    updateTotal(row);
+}
+
     </script>
 </head>
 <body class="bg-gray-100">
@@ -175,13 +193,20 @@ function addChemicalRow() {
                         <div>
                             <label class="block text-gray-700 text-sm font-semibold">Chemical</label>
                             <select name="chemicals[0][chemical_id]" onchange="fillChemicalData(this)" class="border rounded px-2 py-1 w-full">
-                                <option value="">-- Select Chemical --</option>
-                                <?php foreach ($chemicals as $c): ?>
-                                    <option value="<?= $c['id'] ?>" data-remaining="<?= $c['remaining_quantity'] ?>" data-price="<?= $c['unit_price'] ?>">
-                                        <?= htmlspecialchars($c['chemical_name']) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
+    <option value="">-- Select Chemical --</option>
+    <?php foreach ($chemicals as $c): ?>
+        <option value="<?= $c['id'] ?>" 
+                data-remaining="<?= $c['remaining_quantity'] ?>" 
+                data-price="<?= $c['unit_price'] ?>"
+                data-name="<?= htmlspecialchars($c['chemical_name']) ?>"
+                data-lot="<?= htmlspecialchars($c['rm_lot_no']) ?>">
+            <?= htmlspecialchars($c['chemical_name']) ?> (<?= htmlspecialchars($c['rm_lot_no']) ?>)
+        </option>
+    <?php endforeach; ?>
+</select>
+<input type="hidden" name="chemicals[0][chemical_name]" class="chemical-name">
+<input type="hidden" name="chemicals[0][rm_lot_no]" class="lot-no">
+
                         </div>
                         <div>
                             <label class="block text-gray-700 text-sm font-semibold">Remaining Qty</label>
