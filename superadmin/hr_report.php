@@ -33,7 +33,7 @@ $total = $breakfast_total + $lunch_total + $other_expenses_total;
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
-<<body class="bg-gradient-to-br from-blue-50 to-blue-100 min-h-screen">
+<body class="bg-gradient-to-br from-blue-50 to-blue-100 min-h-screen">
   <?php include 'navbar.php'; ?>
 
   <div class="ml-64 p-6">
