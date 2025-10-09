@@ -34,6 +34,15 @@ if ($user && password_verify($password, $user['password'])) {
         case 5: // Quality Control
             header("Location: qc/dashboard.php");
             exit;
+            case 6: // procumement
+            header("Location: procurement/dashboard.php");
+            exit;
+            case 7: // drivers
+            header("Location: drivers/dashboard.php");
+            exit;
+            case 8: // reports
+            header("Location: reports/dashboard.php");  
+            exit;
         default:
             echo "No dashboard found for this user group.";
     }

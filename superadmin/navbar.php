@@ -92,6 +92,7 @@
         <li><a href="approved_purchases.php" class="block hover:bg-blue-200 p-2 rounded">Purchase List</a></li>
        <li><a href="department_requests.php" class="block hover:bg-blue-200 p-2 rounded">Department Requests</a></li>
         <li><a href="delivered_purchases.php" class="block hover:bg-blue-200 p-2 rounded">Delivery Of Purchases</a></li>
+        <li><a href="procurement_reports.php" class="block hover:bg-blue-200 p-2 rounded">Procurement reports</a></li>
       </ul>
     </div>
 
