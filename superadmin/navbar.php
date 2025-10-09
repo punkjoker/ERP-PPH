@@ -60,6 +60,7 @@
         <li><a href="inspect_finished_products.php" class="block hover:bg-blue-200 p-2 rounded">Inspect Finished Products</a></li>
         <li><a href="record_production_run.php" class="block hover:bg-blue-200 p-2 rounded">View Production Runs</a></li>
         <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded">New Item Request</a></li>
+        <li><a href="disposables.php" class="block hover:bg-blue-200 p-2 rounded">Disposals</a></li>
         <li><a href="qc_reports.php" class="block hover:bg-blue-200 p-2 rounded">QC Reports</a></li>
       </ul>
     </div>
