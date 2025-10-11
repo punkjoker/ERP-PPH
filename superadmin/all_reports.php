@@ -234,7 +234,7 @@ $proc_stmt2->close();
     .card { border-radius: 14px; }
     .small-stat { font-size: 0.9rem; color: #6b7280; }
     /* make canvases nicely padded */
-    canvas { background: linear-gradient(180deg, rgba(249,250,251,0.8), rgba(255,255,255,0.8)); border-radius: 12px; padding: 8px; }
+    canvas { background: linear-gradient(180deg, rgba(143, 182, 222, 0.8), rgba(255,255,255,0.8)); border-radius: 12px; padding: 8px; }
   </style>
 </head>
 <body class="bg-gray-50">
