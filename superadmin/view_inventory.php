@@ -104,7 +104,7 @@ $inventory = $stmt->get_result();
               <tr>
                 <td class="border p-2"><?php echo $row['stock_code']; ?></td>
                 <td class="border p-2"><?php echo $row['stock_name']; ?></td>
-                <td class="border p-2"><?php echo $row['quantity']; ?></td>
+                <td class="border p-2"><?php echo $row['original_quantity']; ?></td>
                 <td class="border p-2"><?php echo $row['quantity']; ?></td>
                 <td class="border p-2"><?php echo number_format($row['unit_cost'], 2); ?></td>
                 <td class="border p-2 text-center">
