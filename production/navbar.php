@@ -19,6 +19,7 @@
         <li><a href="record_production_run.php" class="block hover:bg-blue-200 p-2 rounded">Record Production Run</a></li>
         <li><a href="view_finished_products.php" class="block hover:bg-blue-200 p-2 rounded">View Finished Products</a></li>
         <li><a href="view_inventory.php" class="block hover:bg-blue-200 p-2 rounded">View Inventory</a></li>
+        <li><a href="bill_of_material_history.php" class="block hover:bg-blue-200 p-2 rounded">View Bill Of Material</a></li>
         <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded">New Item Request</a></li>
         <li><a href="production_report.php" class="block hover:bg-blue-200 p-2 rounded">Reports</a></li>
       </ul>

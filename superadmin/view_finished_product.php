@@ -45,6 +45,45 @@ if ($pack_result && $pack_result->num_rows > 0) {
     $packs[] = $row;
   }
 }
+// ✅ Fetch Bill of Materials (BOM) data for this product
+$bom_stmt = $conn->prepare("
+  SELECT b.id, b.product_id, p.name AS product_name, b.status, b.description,
+         b.requested_by, b.bom_date, b.issued_by, b.remarks, b.issue_date
+  FROM bill_of_materials b
+  JOIN products p ON b.product_id = p.id
+  WHERE b.id = ?
+");
+$bom_stmt->bind_param("i", $bom_id);
+$bom_stmt->execute();
+$bom = $bom_stmt->get_result()->fetch_assoc();
+$bom_stmt->close();
+
+// ✅ Fetch BOM raw materials (chemicals)
+$chem_stmt = $conn->prepare("
+  SELECT i.chemical_id, c.chemical_name, i.quantity_requested, i.unit, 
+         i.unit_price, i.total_cost, i.rm_lot_no
+  FROM bill_of_material_items i
+  JOIN chemicals_in c ON i.chemical_id = c.id
+  WHERE i.bom_id = ?
+");
+$chem_stmt->bind_param("i", $bom_id);
+$chem_stmt->execute();
+$chemicals = $chem_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$chem_stmt->close();
+
+// ✅ Fetch packaging materials (linked to BOM)
+$pack_stmt = $conn->prepare("
+  SELECT pr.item_name, pr.units, pr.cost_per_unit, pr.total_cost
+  FROM packaging_reconciliation pr
+  JOIN qc_inspections qi ON qi.id = pr.qc_inspection_id
+  JOIN production_runs r ON r.id = qi.production_run_id
+  WHERE r.request_id = ?
+");
+$pack_stmt->bind_param("i", $bom_id);
+$pack_stmt->execute();
+$bom_packaging = $pack_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$pack_stmt->close();
+
 ?>
 
 <!DOCTYPE html>
@@ -94,6 +133,80 @@ if ($pack_result && $pack_result->num_rows > 0) {
         </p>
       </div>
     </div>
+<!-- ✅ Bill of Materials -->
+<div class="bg-white shadow-lg rounded-lg p-6 border mb-8">
+  <h2 class="text-2xl font-semibold text-blue-800 mb-4 border-b pb-2">Bill of Materials (BOM)</h2>
+
+  <div class="grid grid-cols-2 gap-6 text-sm mb-6">
+    <p><span class="font-medium text-gray-700">Requested By:</span> <?= htmlspecialchars($bom['requested_by']) ?></p>
+    <p><span class="font-medium text-gray-700">Issued By:</span> <?= htmlspecialchars($bom['issued_by']) ?></p>
+    <p><span class="font-medium text-gray-700">BOM Date:</span> <?= htmlspecialchars($bom['bom_date']) ?></p>
+    <p><span class="font-medium text-gray-700">Issue Date:</span> <?= htmlspecialchars($bom['issue_date']) ?></p>
+    <p><span class="font-medium text-gray-700">Remarks:</span> <?= htmlspecialchars($bom['remarks']) ?></p>
+  </div>
+
+  <!-- ✅ Chemicals Section -->
+  <h3 class="text-lg font-semibold text-gray-800 mb-2">Raw Materials (Chemicals)</h3>
+  <table class="w-full border text-sm mb-6">
+    <thead class="bg-gray-100">
+      <tr>
+        <th class="border px-3 py-1 text-left">Chemical</th>
+        <th class="border px-3 py-1 text-left">RM LOT NO</th>
+        <th class="border px-3 py-1 text-left">Qty Requested</th>
+        <th class="border px-3 py-1 text-left">Unit</th>
+        <th class="border px-3 py-1 text-left">Unit Price</th>
+        <th class="border px-3 py-1 text-left">Total Cost</th>
+      </tr>
+    </thead>
+    <tbody>
+      <?php $chemical_total = 0; foreach ($chemicals as $c): $chemical_total += $c['total_cost']; ?>
+      <tr>
+        <td class="border px-3 py-1"><?= htmlspecialchars($c['chemical_name']) ?></td>
+        <td class="border px-3 py-1"><?= htmlspecialchars($c['rm_lot_no']) ?></td>
+        <td class="border px-3 py-1"><?= htmlspecialchars($c['quantity_requested']) ?></td>
+        <td class="border px-3 py-1"><?= htmlspecialchars($c['unit']) ?></td>
+        <td class="border px-3 py-1"><?= number_format($c['unit_price'], 2) ?></td>
+        <td class="border px-3 py-1"><?= number_format($c['total_cost'], 2) ?></td>
+      </tr>
+      <?php endforeach; ?>
+      <tr class="bg-gray-50 font-semibold">
+        <td colspan="5" class="text-right border px-3 py-1">Total Chemicals Cost</td>
+        <td class="border px-3 py-1"><?= number_format($chemical_total, 2) ?></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ✅ Packaging Section -->
+  <h3 class="text-lg font-semibold text-gray-800 mb-2">Packaging Materials</h3>
+  <table class="w-full border text-sm">
+    <thead class="bg-gray-100">
+      <tr>
+        <th class="border px-3 py-1 text-left">Item</th>
+        <th class="border px-3 py-1 text-left">Units</th>
+        <th class="border px-3 py-1 text-left">Cost/Unit</th>
+        <th class="border px-3 py-1 text-left">Total Cost</th>
+      </tr>
+    </thead>
+    <tbody>
+      <?php $packaging_total = 0; foreach ($bom_packaging as $p): $packaging_total += $p['total_cost']; ?>
+      <tr>
+        <td class="border px-3 py-1"><?= htmlspecialchars($p['item_name']) ?></td>
+        <td class="border px-3 py-1"><?= htmlspecialchars($p['units']) ?></td>
+        <td class="border px-3 py-1"><?= number_format($p['cost_per_unit'], 2) ?></td>
+        <td class="border px-3 py-1"><?= number_format($p['total_cost'], 2) ?></td>
+      </tr>
+      <?php endforeach; ?>
+      <tr class="bg-gray-50 font-semibold">
+        <td colspan="3" class="text-right border px-3 py-1">Total Packaging Cost</td>
+        <td class="border px-3 py-1"><?= number_format($packaging_total, 2) ?></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="text-right mt-4 font-semibold text-blue-700">
+    Grand Total Cost: <?= number_format($chemical_total + $packaging_total, 2) ?>
+  </div>
+</div>
 
     <!-- ✅ Procedures -->
     <div class="bg-white shadow-lg rounded-lg p-6 border mb-8">

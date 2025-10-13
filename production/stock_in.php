@@ -6,14 +6,19 @@ require 'db_con.php'; // adjust path if needed
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
     $stock_name  = trim($_POST['stock_name']);
     $stock_code  = trim($_POST['stock_code']);
-    $quantity    = trim($_POST['quantity']);
+    $quantity    = (int) trim($_POST['quantity']);
     $unit        = trim($_POST['unit']);
-    $total_cost  = trim($_POST['total_cost']);
-    $unit_cost   = trim($_POST['unit_cost']);
+    $total_cost  = (float) trim($_POST['total_cost']);
+    $unit_cost   = (float) trim($_POST['unit_cost']);
 
     if ($stock_name && $stock_code && $quantity && $unit && $total_cost && $unit_cost) {
-        $stmt = $conn->prepare("INSERT INTO stock_in (stock_name, stock_code, quantity, unit, total_cost, unit_cost) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("ssissd", $stock_name, $stock_code, $quantity, $unit, $total_cost, $unit_cost);
+        // ✅ Insert into both quantity and original_quantity
+        $stmt = $conn->prepare("INSERT INTO stock_in 
+            (stock_name, stock_code, quantity, original_quantity, unit, total_cost, unit_cost) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)");
+        // s = string, i = integer, d = double (float)
+        $stmt->bind_param("ssiisdd", $stock_name, $stock_code, $quantity, $quantity, $unit, $total_cost, $unit_cost);
+
         if ($stmt->execute()) {
             $message = "✅ Stock added successfully!";
         } else {
@@ -26,16 +31,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
 
 // Handle Edit Stock
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_stock'])) {
-    $id         = $_POST['id'];
+    $id         = (int) $_POST['id'];
     $stock_name = trim($_POST['stock_name']);
     $stock_code = trim($_POST['stock_code']);
-    $quantity   = trim($_POST['quantity']);
+    $quantity   = (int) trim($_POST['quantity']);
     $unit       = trim($_POST['unit']);
-    $total_cost = trim($_POST['total_cost']);
-    $unit_cost  = trim($_POST['unit_cost']);
+    $total_cost = (float) trim($_POST['total_cost']);
+    $unit_cost  = (float) trim($_POST['unit_cost']);
 
-    $stmt = $conn->prepare("UPDATE stock_in SET stock_name=?, stock_code=?, quantity=?, unit=?, total_cost=?, unit_cost=? WHERE id=?");
+    $stmt = $conn->prepare("UPDATE stock_in 
+        SET stock_name=?, stock_code=?, quantity=?, unit=?, total_cost=?, unit_cost=? 
+        WHERE id=?");
     $stmt->bind_param("ssissdi", $stock_name, $stock_code, $quantity, $unit, $total_cost, $unit_cost, $id);
+
     if ($stmt->execute()) {
         $message = "✅ Stock updated successfully!";
     } else {
@@ -46,6 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_stock'])) {
 // Fetch all stock
 $result = $conn->query("SELECT * FROM stock_in ORDER BY created_at DESC");
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -141,7 +150,7 @@ $result = $conn->query("SELECT * FROM stock_in ORDER BY created_at DESC");
                           <td class="py-2 px-4"><?= $row['id'] ?></td>
                           <td class="py-2 px-4"><?= htmlspecialchars($row['stock_name']) ?></td>
                           <td class="py-2 px-4"><?= htmlspecialchars($row['stock_code']) ?></td>
-                          <td class="py-2 px-4"><?= $row['quantity'] ?></td>
+                          <td class="py-2 px-4"><?= $row['original_quantity'] ?></td>
                           <td class="py-2 px-4"><?= $row['unit'] ?></td>
                           <td class="py-2 px-4"><?= number_format($row['total_cost'],2) ?></td>
                           <td class="py-2 px-4"><?= number_format($row['unit_cost'],2) ?></td>

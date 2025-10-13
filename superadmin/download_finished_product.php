@@ -15,6 +15,44 @@ $result = $conn->query($sql);
 if (!$result || $result->num_rows === 0) die("No record found for this product.");
 $production = $result->fetch_assoc();
 
+// ✅ Fetch Bill of Materials (BOM) details
+$bom_stmt = $conn->prepare("
+  SELECT b.*, p.name AS product_name 
+  FROM bill_of_materials b
+  JOIN products p ON b.product_id = p.id
+  WHERE b.id = ?
+");
+$bom_stmt->bind_param("i", $bom_id);
+$bom_stmt->execute();
+$bom = $bom_stmt->get_result()->fetch_assoc();
+$bom_stmt->close();
+
+// ✅ Fetch BOM raw materials (chemicals)
+$chem_stmt = $conn->prepare("
+  SELECT i.chemical_id, c.chemical_name, i.quantity_requested, i.unit, 
+         i.unit_price, i.total_cost, i.rm_lot_no
+  FROM bill_of_material_items i
+  JOIN chemicals_in c ON i.chemical_id = c.id
+  WHERE i.bom_id = ?
+");
+$chem_stmt->bind_param("i", $bom_id);
+$chem_stmt->execute();
+$chemicals = $chem_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$chem_stmt->close();
+
+// ✅ Fetch packaging materials (linked to BOM)
+$pack_stmt = $conn->prepare("
+  SELECT pr.item_name, pr.units, pr.cost_per_unit, pr.total_cost
+  FROM packaging_reconciliation pr
+  JOIN qc_inspections qi ON qi.id = pr.qc_inspection_id
+  JOIN production_runs r ON r.id = qi.production_run_id
+  WHERE r.request_id = ?
+");
+$pack_stmt->bind_param("i", $bom_id);
+$pack_stmt->execute();
+$bom_packaging = $pack_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$pack_stmt->close();
+
 // ✅ Fetch related data
 $procedures = $conn->query("SELECT * FROM production_procedures WHERE production_run_id = {$production['id']} ORDER BY created_at ASC");
 $qc_tests = $conn->query("SELECT * FROM qc_inspections WHERE production_run_id = {$production['id']}");
@@ -77,6 +115,63 @@ $pdf->Cell(0, 8, "Description: " . $production['description'], 0, 1);
 $pdf->Cell(0, 8, "Batch Date: " . $production['bom_date'], 0, 1);
 $pdf->Cell(0, 8, "Expected Yield: " . $production['expected_yield'] . " Kg/L", 0, 1);
 $pdf->Cell(0, 8, "Obtained Yield: " . $production['obtained_yield'] . " Kg/L", 0, 1);
+$pdf->Ln(6);
+
+// ✅ Bill of Materials (BOM)
+$pdf->SectionTitle('Bill of Materials (BOM)', [0, 0, 128]);
+$pdf->SetFont('Arial', '', 11);
+$pdf->Cell(0, 8, "Requested By: " . $bom['requested_by'], 0, 1);
+$pdf->Cell(0, 8, "Issued By: " . $bom['issued_by'], 0, 1);
+$pdf->Cell(0, 8, "BOM Date: " . $bom['bom_date'], 0, 1);
+$pdf->Cell(0, 8, "Issue Date: " . $bom['issue_date'], 0, 1);
+$pdf->MultiCell(0, 8, "Remarks: " . $bom['remarks']);
+$pdf->Ln(4);
+
+// ✅ Raw Materials (Chemicals)
+$pdf->SetFont('Arial', 'B', 12);
+$pdf->Cell(0, 8, 'Raw Materials (Chemicals)', 0, 1);
+$pdf->TableHeader(['Chemical', 'RM LOT NO', 'Qty', 'Unit', 'Unit Price', 'Total Cost'], [45, 30, 20, 20, 35, 35]);
+
+$pdf->SetFont('Arial', '', 10);
+$chemical_total = 0;
+foreach ($chemicals as $c) {
+  $pdf->Cell(45, 7, $c['chemical_name'], 1);
+  $pdf->Cell(30, 7, $c['rm_lot_no'], 1);
+  $pdf->Cell(20, 7, $c['quantity_requested'], 1);
+  $pdf->Cell(20, 7, $c['unit'], 1);
+  $pdf->Cell(35, 7, number_format($c['unit_price'], 2), 1);
+  $pdf->Cell(35, 7, number_format($c['total_cost'], 2), 1);
+  $pdf->Ln();
+  $chemical_total += $c['total_cost'];
+}
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Cell(150, 7, 'Total Chemicals Cost', 1);
+$pdf->Cell(35, 7, number_format($chemical_total, 2), 1);
+$pdf->Ln(10);
+
+// ✅ Packaging Materials
+$pdf->SetFont('Arial', 'B', 12);
+$pdf->Cell(0, 8, 'Packaging Materials', 0, 1);
+$pdf->TableHeader(['Item', 'Units', 'Cost/Unit', 'Total Cost'], [80, 30, 40, 40]);
+
+$pdf->SetFont('Arial', '', 10);
+$packaging_total = 0;
+foreach ($bom_packaging as $p) {
+  $pdf->Cell(80, 7, $p['item_name'], 1);
+  $pdf->Cell(30, 7, $p['units'], 1);
+  $pdf->Cell(40, 7, number_format($p['cost_per_unit'], 2), 1);
+  $pdf->Cell(40, 7, number_format($p['total_cost'], 2), 1);
+  $pdf->Ln();
+  $packaging_total += $p['total_cost'];
+}
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Cell(150, 7, 'Total Packaging Cost', 1);
+$pdf->Cell(40, 7, number_format($packaging_total, 2), 1);
+$pdf->Ln(10);
+
+// ✅ Grand Total
+$pdf->SetFont('Arial', 'B', 12);
+$pdf->Cell(0, 8, 'Grand Total BOM Cost: Ksh ' . number_format($chemical_total + $packaging_total, 2), 0, 1, 'R');
 $pdf->Ln(6);
 
 // ✅ Procedures

@@ -28,6 +28,8 @@
       <ul class="ml-4 space-y-2 text-sm">
         <li><a href="add_employee.php" class="block hover:bg-blue-200 p-2 rounded">Add Employee</a></li>
         <li><a href="view_employees.php" class="block hover:bg-blue-200 p-2 rounded">View Employees</a></li>
+        <li><a href="employee_information.php" class="block hover:bg-blue-200 p-2 rounded">Employees Information</a></li>
+        <li><a href="perfomance_evaluation_list.php" class="block hover:bg-blue-200 p-2 rounded">Perfomance Evaluation</a></li>
         <li><a href="manage_leaves.php" class="block hover:bg-blue-200 p-2 rounded">Manage Leaves</a></li>
         <li><a href="manage_expenses.php" class="block hover:bg-blue-200 p-2 rounded">Add Expense</a></li>
         <li><a href="add_lunch_expense.php" class="block hover:bg-blue-200 p-2 rounded">Lunch Expense</a></li>

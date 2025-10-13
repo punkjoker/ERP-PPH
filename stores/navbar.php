@@ -16,14 +16,18 @@
     <div>
       <h3 class="text-blue-700 font-semibold uppercase">Stores</h3>
       <ul class="ml-4 space-y-2 text-sm">
-        <li><a href="add_store_item.php" class="block hover:bg-blue-200 p-2 rounded">Add New Item</a></li>
-        <li><a href="view_inventory.php" class="block hover:bg-blue-200 p-2 rounded">Inventory Overview</a></li>
-        <li><a href="issue_items.php" class="block hover:bg-blue-200 p-2 rounded">Issue Items</a></li>
-        <li><a href="return_items.php" class="block hover:bg-blue-200 p-2 rounded">Return Items</a></li>
-        <li><a href="reorder_alerts.php" class="block hover:bg-blue-200 p-2 rounded">Reorder Alerts</a></li>
-        <li><a href="received_deliveries.php" class="block hover:bg-blue-200 p-2 rounded">Received Deliveries</a></li>
-        <li><a href="department_requests.php" class="block hover:bg-blue-200 p-2 rounded">Department Requests</a></li>
-        <li><a href="store_reports.php" class="block hover:bg-blue-200 p-2 rounded">Store Reports</a></li>
+        <li><a href="add_material.php" class="block hover:bg-blue-200 p-2 rounded">Add Raw Material</a></li>
+        <li><a href="remove_material.php" class="block hover:bg-blue-200 p-2 rounded">Remove Raw Material</a></li>
+        <li><a href="chemicals_in.php" class="block hover:bg-blue-200 p-2 rounded">Chemicals In</a></li>
+        <li><a href="stock_in.php" class="block hover:bg-blue-200 p-2 rounded">Stock In</a></li>
+        <li><a href="qc_approval.php" class="block hover:bg-blue-200 p-2 rounded">QC Approval</a></li>
+        <li><a href="stock_out.php" class="block hover:bg-blue-200 p-2 rounded">Stock Out</a></li>
+        <li><a href="production_requests.php" class="block hover:bg-blue-200 p-2 rounded">Production Requests</a></li>
+        <li><a href="view_inventory.php" class="block hover:bg-blue-200 p-2 rounded">View Inventory</a></li>
+        <li><a href="bill_of_material_history.php" class="block hover:bg-blue-200 p-2 rounded">View Bill Of Material</a></li>
+         <li><a href="order_deliveries.php" class="block hover:bg-blue-200 p-2 rounded">Create Delivery</a></li>
+        <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded">New Item Request</a></li>
+        <li><a href="store_reports.php" class="block hover:bg-blue-200 p-2 rounded">Reports</a></li>
       </ul>
     </div>
   </nav>
