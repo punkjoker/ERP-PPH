@@ -28,21 +28,29 @@ if (!$bom) {
 $sql = "SELECT 
             i.id, 
             i.chemical_id, 
-            c.chemical_name, 
+            i.chemical_name, 
+            i.chemical_code, 
             i.quantity_requested, 
             i.unit, 
             i.unit_price, 
             i.total_cost,
-            i.rm_lot_no
+            i.rm_lot_no,
+            i.po_number
         FROM bill_of_material_items i
-        JOIN chemicals_in c ON i.chemical_id = c.id
         WHERE i.bom_id = ?";
+
 
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("i", $bom_id);
 $stmt->execute();
 $chemicals = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
+
+$total_quantity_requested = 0;
+foreach ($chemicals as $c) {
+    $total_quantity_requested += $c['quantity_requested'];
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -89,6 +97,7 @@ $stmt->close();
             <div class="mb-6">
                 <h2 class="text-xl font-semibold text-gray-800 mb-2">Product Details</h2>
                 <p><span class="font-semibold">Product Name:</span> <?= htmlspecialchars($bom['product_name']) ?></p>
+                <p><span class="font-semibold">Quantity to Produce:</span> <?= number_format($total_quantity_requested, 2) ?>kgs/ltrs</p>
                 <p><span class="font-semibold">Status:</span> <?= htmlspecialchars($bom['status']) ?></p>
             </div>
 
@@ -99,7 +108,10 @@ $stmt->close();
                     <thead class="bg-gray-200">
                         <tr>
                             <th class="border px-3 py-2 text-left">Chemical</th>
+                            
+                            <th class="border px-3 py-2 text-left">Chemical Code</th>
                             <th class="border px-3 py-2 text-left">RM LOT NO</th>
+                            <th class="border px-3 py-2 text-left">PO NO</th>
                             <th class="border px-3 py-2 text-left">Qty Requested</th>
                             <th class="border px-3 py-2 text-left">Unit</th>
                             <th class="border px-3 py-2 text-left">Unit Price</th>
@@ -114,7 +126,9 @@ $stmt->close();
                         ?>
                         <tr>
                             <td class="border px-3 py-2"><?= htmlspecialchars($c['chemical_name']) ?></td>
+                            <td class="border px-3 py-2"><?= htmlspecialchars($c['chemical_code']) ?></td>
                             <td class="border px-3 py-2"><?= htmlspecialchars($c['rm_lot_no']) ?></td>
+                            <td class="border px-3 py-2">PO#<?= htmlspecialchars($c['po_number']) ?></td>
                             <td class="border px-3 py-2"><?= htmlspecialchars($c['quantity_requested']) ?></td>
                             <td class="border px-3 py-2"><?= htmlspecialchars($c['unit']) ?></td>
                             <td class="border px-3 py-2"><?= number_format($c['unit_price'], 2) ?></td>

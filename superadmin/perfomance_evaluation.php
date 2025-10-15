@@ -231,7 +231,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <button type="submit" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 transition">Submit Evaluation</button>
-        <a href="performance_evaluation_list.php" class="ml-2 bg-gray-600 text-white px-6 py-2 rounded hover:bg-gray-700">Back</a>
+        <a href="perfomance_evaluation_list.php" class="ml-2 bg-gray-600 text-white px-6 py-2 rounded hover:bg-gray-700">Back</a>
     </form>
 </div>
 

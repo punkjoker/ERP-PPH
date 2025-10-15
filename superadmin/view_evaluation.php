@@ -163,8 +163,8 @@ if (!$evaluation) {
         </div>
 
         <div class="mt-10 flex gap-3">
-            <a href="performance_evaluation_list.php" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">Back</a>
-            <a href="performance_evaluation.php?id=<?= $employee_id ?>" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Update Evaluation</a>
+            <a href="perfomance_evaluation_list.php" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">Back</a>
+            <a href="perfomance_evaluation.php?id=<?= $employee_id ?>" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Update Evaluation</a>
         </div>
     <?php endif; ?>
 </div>

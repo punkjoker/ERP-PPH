@@ -35,6 +35,7 @@
         <li><a href="add_lunch_expense.php" class="block hover:bg-blue-200 p-2 rounded">Lunch Expense</a></li>
         <li><a href="breakfast_expense.php" class="block hover:bg-blue-200 p-2 rounded">Breakfast Expense</a></li>
         <li><a href="record_training.php" class="block hover:bg-blue-200 p-2 rounded">Record Training</a></li>
+        <li><a href="packaging_request.php" class="block hover:bg-blue-200 p-2 rounded">Packaging Request</a></li>
         <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded">New Item Request</a></li>
         <li><a href="hr_report.php" class="block hover:bg-blue-200 p-2 rounded">HR Report</a></li>
       </ul>
@@ -47,6 +48,7 @@
         <li><a href="add_product.php" class="block hover:bg-blue-200 p-2 rounded">Add Product</a></li>
         <li><a href="manage_bom.php" class="block hover:bg-blue-200 p-2 rounded">Manage BOM</a></li>
         <li><a href="record_production_run.php" class="block hover:bg-blue-200 p-2 rounded">Record Production Run</a></li>
+        <li><a href="packaging_list.php" class="block hover:bg-blue-200 p-2 rounded">Packaging list</a></li>
         <li><a href="view_finished_products.php" class="block hover:bg-blue-200 p-2 rounded">View Finished Products</a></li>
         <li><a href="view_inventory.php" class="block hover:bg-blue-200 p-2 rounded">View Inventory</a></li>
         <li><a href="bill_of_material_history.php" class="block hover:bg-blue-200 p-2 rounded">View Bill Of Material</a></li>
@@ -75,6 +77,7 @@
         <li><a href="add_material.php" class="block hover:bg-blue-200 p-2 rounded">Add Raw Material</a></li>
         <li><a href="remove_material.php" class="block hover:bg-blue-200 p-2 rounded">Remove Raw Material</a></li>
         <li><a href="chemicals_in.php" class="block hover:bg-blue-200 p-2 rounded">Chemicals In</a></li>
+        <li><a href="chemical_list.php" class="block hover:bg-blue-200 p-2 rounded">Chemicals List</a></li>
         <li><a href="stock_in.php" class="block hover:bg-blue-200 p-2 rounded">Stock In</a></li>
         <li><a href="qc_approval.php" class="block hover:bg-blue-200 p-2 rounded">QC Approval</a></li>
         <li><a href="stock_out.php" class="block hover:bg-blue-200 p-2 rounded">Stock Out</a></li>

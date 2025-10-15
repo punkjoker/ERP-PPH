@@ -3,16 +3,19 @@ include 'db_con.php';
 
 $bom_id = $_GET['id'] ?? 0;
 
-// ✅ Fetch production + product + QC details
-$sql = "SELECT pr.*, p.name AS product_name, bom.requested_by, bom.description, bom.bom_date, qc.created_at AS qc_date
+// ✅ Fetch product, QC, production details
+$sql = "SELECT pr.*, p.name AS product_name, bom.requested_by, bom.description, bom.bom_date
         FROM production_runs pr
         JOIN bill_of_materials bom ON pr.request_id = bom.id
         JOIN products p ON bom.product_id = p.id
-        LEFT JOIN qc_inspections qc ON qc.production_run_id = pr.id
         WHERE pr.request_id = $bom_id LIMIT 1";
-$result = $conn->query($sql);
-if (!$result || $result->num_rows === 0) die("No record found for this product.");
-$production = $result->fetch_assoc();
+$res = $conn->query($sql);
+if (!$res || $res->num_rows === 0) die("No record found for this BOM ID.");
+$production = $res->fetch_assoc();
+
+
+// ✅ Fetch all materials (for dropdown)
+$materials = $conn->query("SELECT id, material_name, cost, quantity FROM materials ORDER BY material_name ASC")->fetch_all(MYSQLI_ASSOC);
 
 // ✅ Fetch production procedures
 $procedures = [];
@@ -90,56 +93,72 @@ $pack_stmt->bind_param("i", $bom_id);
 $pack_stmt->execute();
 $bom_packaging = $pack_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $pack_stmt->close();
-
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>View Finished Product - <?= htmlspecialchars($production['product_name']) ?></title>
+  <title>Update Packaging - <?= htmlspecialchars($production['product_name']) ?></title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+  // 🧮 Calculate packages and unpackaged quantity
+  function calculatePackages(row) {
+    const yieldQty = parseFloat(document.getElementById('obtainedYield').value) || 0;
+    const packSize = parseFloat(row.querySelector('.pack-size').value) || 0;
+    const unitCost = parseFloat(row.querySelector('.unit-cost').value) || 0;
+
+    if (packSize > 0) {
+      const fullPacks = Math.floor(yieldQty / packSize);
+      const unpackaged = yieldQty % packSize;
+      const totalCost = (fullPacks * unitCost).toFixed(2);
+
+      // Update fields
+      row.querySelector('.quantity-used').value = fullPacks;
+      row.querySelector('.unpackaged-qty').value = unpackaged.toFixed(2);
+      row.querySelector('.total-cost').value = totalCost;
+    }
+  }
+
+  // ➕ Add new material row
+  function addMaterialRow() {
+    const template = document.querySelector('.material-row');
+    const clone = template.cloneNode(true);
+    clone.querySelectorAll('input').forEach(i => i.value = '');
+    clone.querySelectorAll('select').forEach(s => s.selectedIndex = 0);
+    document.getElementById('materials-container').appendChild(clone);
+  }
+
+  // 🧾 Auto-fill unit cost & available stock
+  function fillMaterialData(select) {
+  const option = select.options[select.selectedIndex];
+  const row = select.closest('.material-row');
+  row.querySelector('.unit-cost').value = option.dataset.cost;
+  row.querySelector('.available-stock').value = option.dataset.qty;
+  row.querySelector('.pack-size').value = option.dataset.packsize || '';
+  
+  calculatePackages(row);
+}
+
+</script>
 </head>
 
 <body class="bg-gray-100 font-sans">
-  <?php include 'navbar.php'; ?>
+<?php include 'navbar.php'; ?>
 
-  <div class="ml-64 p-6">
-    <!-- ✅ Header -->
-    <div class="bg-white shadow-md rounded-lg p-6 mb-6 flex items-center border-b-4 border-green-600">
-      <img src="images/lynn_logo.png" alt="Logo" class="h-16 mr-6">
-      <div>
-        <h1 class="text-2xl font-bold text-gray-800">FINISHED PRODUCT DETAILS</h1>
-        <p class="text-sm text-gray-600">PRODUCT NAME:
-          <span class="font-semibold text-blue-700"><?= htmlspecialchars($production['product_name']) ?></span>
-        </p>
-        <p class="text-sm text-gray-600">REQUESTED BY:
-          <span class="font-semibold"><?= htmlspecialchars($production['requested_by']) ?></span>
-        </p>
-        <p class="text-sm text-gray-600">STATUS:
-          <span class="font-semibold <?= $production['status'] == 'Completed' ? 'text-green-600' : 'text-yellow-600' ?>">
-            <?= htmlspecialchars($production['status']) ?>
-          </span>
-        </p>
-      </div>
-    </div>
-
-    <!-- ✅ Batch Info -->
-    <div class="bg-white shadow-lg rounded-lg p-6 border mb-8">
-      <h2 class="text-xl font-semibold text-blue-700 mb-4 border-b pb-2">Batch Details</h2>
-      <div class="grid grid-cols-2 gap-6 text-sm">
-        <p><span class="font-medium text-gray-700">Batch Date:</span> <?= htmlspecialchars($production['bom_date']) ?></p>
-        <p><span class="font-medium text-gray-700">Expected Yield:</span> <?= htmlspecialchars($production['expected_yield']) ?> Kg/L</p>
-        <p><span class="font-medium text-gray-700">Obtained Yield:</span> <?= htmlspecialchars($production['obtained_yield']) ?> Kg/L</p>
-        <p><span class="font-medium text-gray-700">Description:</span> <?= htmlspecialchars($production['description']) ?></p>
-        <p><span class="font-medium text-gray-700">Completed At:</span>
-          <?= !empty($production['completed_at']) ? date('d M Y, h:i A', strtotime($production['completed_at'])) : '—' ?>
-        </p>
-        <p><span class="font-medium text-gray-700">QC Date:</span>
-          <?= !empty($production['qc_date']) ? date('d M Y, h:i A', strtotime($production['qc_date'])) : 'Not yet inspected' ?>
-        </p>
-      </div>
-    </div>
+<div class="ml-64 p-6">
+  <!-- ✅ Product Info -->
+  <div class="bg-white p-6 rounded-lg shadow-lg mb-6 border-b-4 border-blue-600">
+    <h2 class="text-2xl font-bold text-gray-800 mb-2">PACKAGING DETAILS</h2>
+    <p><span class="font-semibold text-gray-600">Product:</span> <?= htmlspecialchars($production['product_name']); ?></p>
+    <p><span class="font-semibold text-gray-600">Requested By:</span> <?= htmlspecialchars($production['requested_by']); ?></p>
+    <p><span class="font-semibold text-gray-600">Obtained Yield:</span> 
+      <input type="number" id="obtainedYield" value="<?= htmlspecialchars($production['obtained_yield'] ?? 0); ?>" 
+             class="border p-1 rounded w-24 inline-block text-center font-semibold text-blue-700">
+      <span class="text-gray-600"><?= htmlspecialchars($production['yield_unit'] ?? 'Kg/L'); ?></span>
+    </p>
+    <p><span class="font-semibold text-gray-600">Description:</span> <?= htmlspecialchars($production['description']); ?></p>
+  </div>
 <!-- ✅ Bill of Materials -->
 <div class="bg-white shadow-lg rounded-lg p-6 border mb-8">
   <h2 class="text-2xl font-semibold text-blue-800 mb-4 border-b pb-2">Bill of Materials (BOM)</h2>
@@ -328,23 +347,83 @@ if (empty($production['expected_yield'])) {
       <?php endif; ?>
     </div>
 
-    <!-- ✅ Back Button -->
-     <!--
-    <div class="flex justify-end">
-      <a href="inspect_finished_products.php" 
-         class="bg-gray-500 text-white px-6 py-2 rounded-lg shadow hover:bg-gray-600 transition">
-        ← Back
-      </a>
-    </div>
-    -->
-    <!-- ✅ Download PDF Button -->
-<div class="flex justify-end mb-4">
-  <a href="download_finished_product.php?id=<?= $bom_id ?>" 
-     class="bg-blue-600 text-white px-6 py-2 rounded-lg shadow hover:bg-blue-700 transition">
-    📄 Download as PDF
-  </a>
+  <!-- ✅ Packaging Form -->
+  <form method="POST" action="save_packaging.php">
+    <input type="hidden" name="production_run_id" value="<?= $production['id']; ?>">
+
+    <div id="materials-container">
+      <div class="material-row grid grid-cols-10 gap-2 bg-white p-3 mb-2 rounded shadow-sm border items-center">
+        <div class="col-span-3">
+          <label class="text-sm font-semibold text-gray-700">Material</label>
+          <select name="material_id[]" class="border p-2 rounded w-full" onchange="fillMaterialData(this)">
+            <option value="">-- Select Material --</option>
+            <?php foreach ($materials as $m): ?>
+              <option value="<?= $m['id']; ?>" 
+    data-cost="<?= $m['cost']; ?>"
+    data-qty="<?= $m['quantity']; ?>">
+  <?= htmlspecialchars($m['material_name']); ?>
+</option>
+
+
+            <?php endforeach; ?>
+          </select>
+        </div>
+
+        <div>
+          <label class="text-sm font-semibold text-gray-700">Pack Size (Kg/L)</label>
+          <input type="number" step="0.01" name="pack_size[]" class="pack-size border p-2 rounded w-full" 
+                 oninput="calculatePackages(this.closest('.material-row'))">
+        </div>
+<!-- Unit -->
+   <div>
+  <label class="text-sm font-semibold text-gray-700">Unit</label>
+  <input type="text" name="unit[]" placeholder="e.g. Kg, L, pcs" 
+         class="border p-2 rounded w-full" />
 </div>
 
-  </div>
+
+        <div>
+          <label class="text-sm font-semibold text-gray-700">Available</label>
+          <input type="number" class="available-stock border p-2 rounded w-full bg-gray-100" readonly>
+        </div>
+
+        <div>
+          <label class="text-sm font-semibold text-gray-700">Qty Used</label>
+          <input type="number" name="quantity_used[]" class="quantity-used border p-2 rounded w-full bg-gray-50" readonly>
+        </div>
+
+        <div>
+          <label class="text-sm font-semibold text-gray-700">Unit Cost</label>
+          <input type="number" step="0.01" name="cost_per_unit[]" class="unit-cost border p-2 rounded w-full" 
+                 oninput="calculatePackages(this.closest('.material-row'))">
+        </div>
+
+        <div>
+          <label class="text-sm font-semibold text-gray-700">Total Cost</label>
+          <input type="number" step="0.01" name="total_cost[]" class="total-cost border p-2 rounded w-full bg-gray-100" readonly>
+        </div>
+
+        <div>
+  <label class="text-sm font-semibold text-gray-700">Unpackaged Qty</label>
+  <input type="number" name="unpackaged_qty[]" class="unpackaged-qty border p-2 rounded w-full bg-gray-50" readonly>
+</div>
+
+      </div>
+    </div>
+
+    <button type="button" onclick="addMaterialRow()" 
+            class="mt-3 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition">
+      + Add Material
+    </button>
+
+    <div class="mt-6 flex justify-end">
+      <button type="submit" 
+              class="bg-blue-600 text-white px-6 py-2 rounded-lg shadow hover:bg-blue-700 transition">
+        💾 Save Packaging
+      </button>
+    </div>
+  </form>
+</div>
+
 </body>
 </html>
