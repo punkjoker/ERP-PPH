@@ -95,6 +95,19 @@ ALTER TABLE chemicals_in
 ADD COLUMN status ENUM('Pending','Approved','Rejected') DEFAULT 'Pending' AFTER date_added;
 ALTER TABLE chemicals_in ADD COLUMN batch_no VARCHAR(100) AFTER chemical_name;
 
+ALTER TABLE chemicals_in 
+ADD COLUMN chemical_code VARCHAR(50),
+ADD COLUMN po_number VARCHAR(50),
+ADD COLUMN action_type ENUM('New', 'Restock') DEFAULT 'New';
+
+ALTER TABLE chemicals_in
+ADD COLUMN chemical_id INT AFTER id;
+
+ALTER TABLE chemicals_in
+ADD CONSTRAINT fk_chemical_in_name
+FOREIGN KEY (chemical_id) REFERENCES chemical_names(id)
+ON DELETE CASCADE;
+
 
 CREATE TABLE inspected_chemicals_in (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -138,6 +151,9 @@ CREATE TABLE bill_of_material_items (
     FOREIGN KEY (bom_id) REFERENCES bill_of_materials(id) ON DELETE CASCADE,
     FOREIGN KEY (chemical_id) REFERENCES chemicals_in(id) ON DELETE CASCADE
 );
+
+ALTER TABLE bill_of_material_items ADD COLUMN chemical_code VARCHAR(50) AFTER chemical_id;
+
 ALTER TABLE bill_of_materials 
     ADD requested_by VARCHAR(100) AFTER bom_date,
     ADD description TEXT AFTER requested_by;
@@ -149,8 +165,8 @@ ADD issue_date DATE AFTER remarks;
 
 ALTER TABLE bill_of_material_items
 ADD COLUMN chemical_name VARCHAR(100) AFTER chemical_id,
-ADD COLUMN rm_lot_no VARCHAR(50) AFTER chemical_name;
-
+ADD COLUMN rm_lot_no VARCHAR(50) AFTER chemical_name,
+ADD COLUMN po_number VARCHAR(50);
 
 CREATE TABLE production_runs (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -317,6 +333,8 @@ CREATE TABLE order_items (
     FOREIGN KEY (product_id) REFERENCES procurement_products(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+ALTER TABLE order_items ADD COLUMN chemical_code VARCHAR(100) NULL AFTER manual_name;
+
 CREATE TABLE deliveries (
     id INT AUTO_INCREMENT PRIMARY KEY,
     po_id INT NOT NULL,
@@ -468,3 +486,168 @@ CREATE TABLE disposables (
   reason_for_disposal VARCHAR(255) DEFAULT NULL,
   remarks TEXT DEFAULT NULL
 );
+
+CREATE TABLE employee_information (
+  info_id INT AUTO_INCREMENT PRIMARY KEY,
+  employee_id INT NOT NULL,
+  skills TEXT,
+  certifications TEXT,
+  expected_salary DECIMAL(10,2) DEFAULT 0.00,
+  approved_salary DECIMAL(10,2) DEFAULT 0.00,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY (employee_id),
+  FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
+);
+CREATE TABLE employee_information_items (
+  item_id INT AUTO_INCREMENT PRIMARY KEY,
+  employee_id INT NOT NULL,
+  category ENUM('education','experience') NOT NULL,
+  field1 VARCHAR(255),
+  field2 VARCHAR(255),
+  field3 VARCHAR(255),
+  field4 VARCHAR(255),
+  field5 VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
+);
+
+CREATE TABLE performance_evaluations (
+  eval_id INT AUTO_INCREMENT PRIMARY KEY,
+  employee_id INT NOT NULL,
+  evaluator_name VARCHAR(255),
+  position_department VARCHAR(255),
+  academic_qualification VARCHAR(255),
+  academic_grade VARCHAR(50),
+  professional_qualification VARCHAR(255),
+  professional_grade VARCHAR(50),
+  strengths TEXT,
+  key_activities TEXT,
+  accomplishments TEXT,
+  challenges TEXT,
+  improvement_plan TEXT,
+  previous_goals TEXT,
+  future_goals TEXT,
+  manager_support TEXT,
+  employee_concerns TEXT,
+  overall_comments_appraisee TEXT,
+  overall_comments_appraiser TEXT,
+  employee_signature_date DATE,
+  evaluator_signature_date DATE,
+  approved_by VARCHAR(255),
+  approved_signature VARCHAR(255),
+  approved_date DATE,
+  authorized_by VARCHAR(255),
+  authorized_signature VARCHAR(255),
+  authorized_date DATE,
+  eval_date DATE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
+);
+
+CREATE TABLE performance_behaviours (
+  behaviour_id INT AUTO_INCREMENT PRIMARY KEY,
+  eval_id INT NOT NULL,
+  category VARCHAR(100),       -- e.g., 'Work to full potential', 'Quality of work', etc.
+  rating INT,                  -- 1-5 scale
+  FOREIGN KEY (eval_id) REFERENCES performance_evaluations(eval_id) ON DELETE CASCADE
+);
+
+CREATE TABLE performance_objectives (
+  objective_id INT AUTO_INCREMENT PRIMARY KEY,
+  eval_id INT NOT NULL,
+  department_objective TEXT,
+  target TEXT,
+  actual_performance TEXT,
+  rating_appraisee INT,
+  rating_appraiser INT,
+  rating_consensus INT,
+  FOREIGN KEY (eval_id) REFERENCES performance_evaluations(eval_id) ON DELETE CASCADE
+);
+
+
+-- Table to store BOM definitions per product
+CREATE TABLE bom (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+-- Table to store materials used in each product’s BOM
+CREATE TABLE bom_materials (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bom_id INT NOT NULL,
+    chemical_id INT NOT NULL,
+    std_quantity DECIMAL(10,2) NOT NULL, -- Quantity required per 1kg of product
+    FOREIGN KEY (bom_id) REFERENCES bom(id) ON DELETE CASCADE,
+    FOREIGN KEY (chemical_id) REFERENCES chemicals_in(id) ON DELETE CASCADE
+);
+
+ALTER TABLE bom
+ADD COLUMN std_quantity DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER product_id,
+ADD COLUMN unit VARCHAR(20) NOT NULL DEFAULT 'kg' AFTER std_quantity;
+
+ALTER TABLE bom_materials ADD COLUMN unit VARCHAR(20) AFTER std_quantity;
+
+
+CREATE TABLE chemical_names (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    chemical_name VARCHAR(150) NOT NULL,
+    chemical_code VARCHAR(100) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+ALTER TABLE bill_of_material_items
+DROP FOREIGN KEY bill_of_material_items_ibfk_2;
+
+ALTER TABLE bill_of_material_items
+ADD CONSTRAINT fk_bomitem_chemicalname
+FOREIGN KEY (chemical_id) REFERENCES chemical_names(id)
+ON DELETE CASCADE;
+
+ALTER TABLE bill_of_material_items DROP FOREIGN KEY bill_of_material_items_ibfk_2;
+
+ALTER TABLE bill_of_material_items
+ADD INDEX idx_chemical_id (chemical_id);
+
+CREATE TABLE qc_tests (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  qc_inspection_id INT NOT NULL,
+  test_name VARCHAR(255),
+  specification VARCHAR(255),
+  procedure_done VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (qc_inspection_id) REFERENCES qc_inspections(id) ON DELETE CASCADE
+);
+
+CREATE TABLE packaging (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    production_run_id INT NOT NULL,
+    material_id INT,
+    item_name VARCHAR(100),                        -- material name copied at the time of packaging
+    packaging_date DATE DEFAULT (CURRENT_DATE),
+    
+    pack_size DECIMAL(10,2) DEFAULT 0.00,          -- e.g., 5 kg per pack
+    unpackaged_qty DECIMAL(10,2) DEFAULT 0.00,     -- quantity left unpackaged
+    quantity_used INT DEFAULT 0,                   -- number of packs used
+    units VARCHAR(50),                             -- e.g., kg, pcs, bags, etc.
+    
+    cost_per_unit DECIMAL(10,2) DEFAULT 0.00,
+    total_cost DECIMAL(10,2) GENERATED ALWAYS AS (quantity_used * cost_per_unit) STORED,
+    
+    status ENUM('Pending', 'In Progress', 'Completed') DEFAULT 'Pending',
+    remarks TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- ✅ Relationships
+    FOREIGN KEY (production_run_id) REFERENCES production_runs(id) ON DELETE CASCADE,
+    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL
+);
+
+ALTER TABLE packaging
+ADD COLUMN issued_by VARCHAR(100) DEFAULT NULL,
+ADD COLUMN issued_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+MODIFY COLUMN status ENUM('Pending', 'Approved', 'Rejected') DEFAULT 'Pending';

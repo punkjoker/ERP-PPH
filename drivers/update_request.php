@@ -23,12 +23,21 @@ if (!$bom) {
     die("BOM request not found.");
 }
 
-// Fetch BOM items (chemicals)
-$sql = "SELECT i.id, i.chemical_id, c.chemical_name, c.remaining_quantity, i.quantity_requested, 
-               i.unit, i.unit_price, i.total_cost
+// Fetch BOM items with chemical code
+$sql = "SELECT 
+            i.id, 
+            i.chemical_id, 
+            i.chemical_name, 
+            i.chemical_code, 
+            i.quantity_requested, 
+            i.unit, 
+            i.unit_price, 
+            i.total_cost,
+            i.rm_lot_no
         FROM bill_of_material_items i
-        JOIN chemicals_in c ON i.chemical_id = c.id
         WHERE i.bom_id = ?";
+
+
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("i", $bom_id);
 $stmt->execute();
@@ -51,24 +60,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt->execute();
     $stmt->close();
 
-    // ✅ Deduct stock only if Approved
-    if ($status === "Approved") {
-        foreach ($chemicals as $chem) {
-            $qty_requested = $chem['quantity_requested'];
-            $chemical_id = $chem['chemical_id'];
+ // ✅ Deduct stock only if Approved
+if ($status === "Approved") {
+    foreach ($chemicals as $chem) {
+        $qty_requested = $chem['quantity_requested'];
+        $chemical_code = $chem['chemical_code']; 
+        $bom_item_id = $chem['id']; // To update the right row in bill_of_material_items
 
-            $stmt = $conn->prepare("UPDATE chemicals_in 
-                                    SET remaining_quantity = remaining_quantity - ? 
-                                    WHERE id = ? AND remaining_quantity >= ?");
-            $stmt->bind_param("dii", $qty_requested, $chemical_id, $qty_requested);
+        // Fetch FIFO lots for this chemical
+        // ✅ Fetch FIFO lots with PO number
+$stmt = $conn->prepare("
+    SELECT id, remaining_quantity, rm_lot_no, unit_price, po_number 
+    FROM chemicals_in 
+    WHERE chemical_code = ? AND remaining_quantity > 0 
+    ORDER BY date_added ASC, id ASC
+");
+
+        $stmt->bind_param("s", $chemical_code);
+        $stmt->execute();
+        $lots = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+
+        $total_cost = 0;
+        $lot_used = null;
+        $unit_price_used = 0;
+
+        foreach ($lots as $lot) {
+            if ($qty_requested <= 0) break;
+
+            $deduct_qty = min($lot['remaining_quantity'], $qty_requested);
+            $lot_used = $lot['rm_lot_no']; // Remember the last lot used
+            $unit_price_used = $lot['unit_price'];
+             $po_number_used = $lot['po_number'];
+            // Deduct from that lot
+            $stmt = $conn->prepare("
+                UPDATE chemicals_in 
+                SET remaining_quantity = remaining_quantity - ? 
+                WHERE id = ?
+            ");
+            $stmt->bind_param("di", $deduct_qty, $lot['id']);
             $stmt->execute();
             $stmt->close();
-        }
-    }
 
-    $success = "Production request updated successfully.";
+            // Calculate total cost for this deduction
+            $total_cost += ($deduct_qty * $unit_price_used);
+            $qty_requested -= $deduct_qty;
+        }
+
+       // ✅ Update BOM item with details from last lot used 
+if ($lot_used !== null) {
+    $stmt = $conn->prepare("
+        UPDATE bill_of_material_items 
+        SET rm_lot_no = ?, 
+            unit_price = ?, 
+            total_cost = ?, 
+            po_number = ?
+        WHERE id = ?
+    ");
+    $stmt->bind_param("sddsi", $lot_used, $unit_price_used, $total_cost, $po_number_used, $bom_item_id);
+    $stmt->execute();
+    $stmt->close();
 }
 
+
+        // Warn if still pending quantity
+        if ($qty_requested > 0) {
+            echo "<div class='bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4'>
+                    Insufficient stock for chemical code: $chemical_code
+                  </div>";
+        }
+    }
+}
+
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -98,8 +162,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <thead class="bg-gray-200">
                     <tr>
                         <th class="border px-3 py-2 text-left">Chemical</th>
+                        <th class="border px-3 py-2 text-left">Chemical code</th>
                         <th class="border px-3 py-2 text-left">Qty Requested</th>
-                        <th class="border px-3 py-2 text-left">Remaining Qty</th>
+                        
                         <th class="border px-3 py-2 text-left">Unit</th>
                         <th class="border px-3 py-2 text-left">Unit Price</th>
                         <th class="border px-3 py-2 text-left">Total Cost</th>
@@ -113,8 +178,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ?>
                         <tr>
                             <td class="border px-3 py-2"><?= htmlspecialchars($c['chemical_name']) ?></td>
+                            <td class="border px-3 py-2"><?= htmlspecialchars($c['chemical_code']) ?></td>
                             <td class="border px-3 py-2"><?= htmlspecialchars($c['quantity_requested']) ?></td>
-                            <td class="border px-3 py-2"><?= htmlspecialchars($c['remaining_quantity']) ?></td>
+                            
                             <td class="border px-3 py-2"><?= htmlspecialchars($c['unit']) ?></td>
                             <td class="border px-3 py-2"><?= htmlspecialchars($c['unit_price']) ?></td>
                             <td class="border px-3 py-2"><?= htmlspecialchars($c['total_cost']) ?></td>

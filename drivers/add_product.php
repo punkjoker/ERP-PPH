@@ -80,6 +80,7 @@ $products = $result->fetch_all(MYSQLI_ASSOC);
                         <th class="border px-3 py-2 text-left">Category</th>
                         <th class="border px-3 py-2 text-left">Description</th>
                         <th class="border px-3 py-2 text-left">Date Added</th>
+                        <th class="border px-3 py-2 text-center">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -91,11 +92,15 @@ $products = $result->fetch_all(MYSQLI_ASSOC);
                                 <td class="border px-3 py-2"><?= htmlspecialchars($p['category']) ?></td>
                                 <td class="border px-3 py-2"><?= htmlspecialchars($p['description']) ?></td>
                                 <td class="border px-3 py-2"><?= $p['created_at'] ?? '' ?></td>
+                                <td class="border px-3 py-2 text-center">
+                                    <a href="update_bom.php?id=<?= $p['id'] ?>" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm mr-2">Update BOM</a>
+                                    <a href="view_bom_materials.php?id=<?= $p['id'] ?>" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm">View BOM</a>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="5" class="border px-3 py-2 text-center text-gray-500">No products added yet.</td>
+                            <td colspan="6" class="border px-3 py-2 text-center text-gray-500">No products added yet.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>

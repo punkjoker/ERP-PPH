@@ -124,6 +124,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_production']))
 
         <!-- Production Form -->
         <form method="POST" class="space-y-8 bg-white shadow-lg p-8 rounded-lg border">
+<?php
+// ✅ Fetch BOM items
+$sql = "SELECT 
+            i.chemical_name, 
+            i.chemical_code, 
+            i.rm_lot_no, 
+            i.po_number, 
+            i.quantity_requested, 
+            i.unit, 
+            i.unit_price, 
+            i.total_cost
+        FROM bill_of_material_items i
+        WHERE i.bom_id = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("i", $bom_id);
+$stmt->execute();
+$chemicals = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$stmt->close();
+
+// ✅ Calculate total (expected yield)
+$total_quantity_requested = 0;
+$total_cost = 0;
+foreach ($chemicals as $c) {
+    $total_quantity_requested += $c['quantity_requested'];
+    $total_cost += $c['total_cost'];
+}
+
+// ✅ Autofill expected yield in production record
+if (empty($production['expected_yield'])) {
+    $production['expected_yield'] = $total_quantity_requested;
+}
+?>
+
+<!-- ✅ Bill of Materials Section -->
+<section class="mb-8">
+    <h3 class="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Bill of Materials</h3>
+    <div class="overflow-x-auto">
+        <table class="w-full border border-gray-300 text-sm">
+            <thead class="bg-gray-100">
+                <tr>
+                    <th class="border px-3 py-2 text-left">Chemical</th>
+                    <th class="border px-3 py-2 text-left">Chemical Code</th>
+                    <th class="border px-3 py-2 text-left">RM LOT NO</th>
+                    <th class="border px-3 py-2 text-left">PO NO</th>
+                    <th class="border px-3 py-2 text-left">Qty Requested</th>
+                    <th class="border px-3 py-2 text-left">Unit</th>
+                    <th class="border px-3 py-2 text-left">Unit Price</th>
+                    <th class="border px-3 py-2 text-left">Total Cost</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($chemicals as $c): ?>
+                <tr class="hover:bg-gray-50">
+                    <td class="border px-3 py-2"><?= htmlspecialchars($c['chemical_name']) ?></td>
+                    <td class="border px-3 py-2"><?= htmlspecialchars($c['chemical_code']) ?></td>
+                    <td class="border px-3 py-2"><?= htmlspecialchars($c['rm_lot_no']) ?></td>
+                    <td class="border px-3 py-2">PO#<?= htmlspecialchars($c['po_number']) ?></td>
+                    <td class="border px-3 py-2"><?= htmlspecialchars($c['quantity_requested']) ?></td>
+                    <td class="border px-3 py-2"><?= htmlspecialchars($c['unit']) ?></td>
+                    <td class="border px-3 py-2"><?= number_format($c['unit_price'], 2) ?></td>
+                    <td class="border px-3 py-2"><?= number_format($c['total_cost'], 2) ?></td>
+                </tr>
+                <?php endforeach; ?>
+                <tr class="bg-gray-100 font-semibold">
+                    <td colspan="7" class="text-right border px-3 py-2">Total Production Cost</td>
+                    <td class="border px-3 py-2"><?= number_format($total_cost, 2) ?></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
 
             <!-- Manufacturing Details -->
             <section>

@@ -1,220 +1,263 @@
 <?php
 session_start();
-require 'db_con.php'; // adjust path if needed
+require 'db_con.php';
 
-// Handle Add Stock
+// ✅ Handle Add Stock
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
-    $stock_name  = trim($_POST['stock_name']);
-    $stock_code  = trim($_POST['stock_code']);
-    $quantity    = (int) trim($_POST['quantity']);
-    $unit        = trim($_POST['unit']);
-    $total_cost  = (float) trim($_POST['total_cost']);
-    $unit_cost   = (float) trim($_POST['unit_cost']);
-
-    if ($stock_name && $stock_code && $quantity && $unit && $total_cost && $unit_cost) {
-        // ✅ Insert into both quantity and original_quantity
-        $stmt = $conn->prepare("INSERT INTO stock_in 
-            (stock_name, stock_code, quantity, original_quantity, unit, total_cost, unit_cost) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)");
-        // s = string, i = integer, d = double (float)
-        $stmt->bind_param("ssiisdd", $stock_name, $stock_code, $quantity, $quantity, $unit, $total_cost, $unit_cost);
-
-        if ($stmt->execute()) {
-            $message = "✅ Stock added successfully!";
-        } else {
-            $message = "❌ Error adding stock: " . $conn->error;
-        }
-    } else {
-        $message = "⚠️ Please fill all fields.";
-    }
-}
-
-// Handle Edit Stock
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_stock'])) {
-    $id         = (int) $_POST['id'];
     $stock_name = trim($_POST['stock_name']);
     $stock_code = trim($_POST['stock_code']);
-    $quantity   = (int) trim($_POST['quantity']);
-    $unit       = trim($_POST['unit']);
-    $total_cost = (float) trim($_POST['total_cost']);
-    $unit_cost  = (float) trim($_POST['unit_cost']);
+    $batch_no = trim($_POST['batch_no']);
+    $po_number = trim($_POST['po_number']);
+    $quantity = floatval($_POST['quantity']);
+    $unit = trim($_POST['unit']);
+    $unit_price = floatval($_POST['unit_price']);
+    $total_cost = floatval($_POST['total_cost']);
+    $created_at = $_POST['created_at'];
 
-    $stmt = $conn->prepare("UPDATE stock_in 
-        SET stock_name=?, stock_code=?, quantity=?, unit=?, total_cost=?, unit_cost=? 
-        WHERE id=?");
-    $stmt->bind_param("ssissdi", $stock_name, $stock_code, $quantity, $unit, $total_cost, $unit_cost, $id);
-
-    if ($stmt->execute()) {
-        $message = "✅ Stock updated successfully!";
-    } else {
-        $message = "❌ Error updating stock: " . $conn->error;
-    }
+    $stmt = $conn->prepare("INSERT INTO stock_in 
+        (stock_name, stock_code, po_number, batch_no, quantity, original_quantity, unit, unit_cost, total_cost, created_at) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("ssssddsdds", 
+        $stock_name, 
+        $stock_code, 
+        $po_number, 
+        $batch_no, 
+        $quantity, 
+        $quantity, // same as original_quantity initially
+        $unit, 
+        $unit_price, 
+        $total_cost, 
+        $created_at
+    );
+    $stmt->execute();
 }
 
-// Fetch all stock
-$result = $conn->query("SELECT * FROM stock_in ORDER BY created_at DESC");
-?>
+// ✅ Fetch approved POs
+$poQuery = $conn->query("SELECT id, po_no FROM po_list WHERE status = 1 ORDER BY created_at DESC");
 
+// ✅ Fetch stock names from `chemical_names` where main_category = 'Engineering Products'
+$stockNames = $conn->query("SELECT chemical_name AS stock_name, chemical_code AS stock_code 
+    FROM chemical_names 
+    WHERE main_category = 'Engineering Products' 
+    ORDER BY chemical_name ASC");
+
+// ✅ Filters
+$from_date = $_GET['from_date'] ?? '';
+$to_date = $_GET['to_date'] ?? '';
+$search_name = $_GET['search_name'] ?? '';
+
+$query = "SELECT * FROM stock_in WHERE 1=1";
+if (!empty($from_date) && !empty($to_date)) {
+    $query .= " AND DATE(created_at) BETWEEN '{$from_date}' AND '{$to_date}'";
+}
+if (!empty($search_name)) {
+    $query .= " AND (stock_name LIKE '%{$search_name}%' OR batch_no LIKE '%{$search_name}%')";
+}
+$query .= " ORDER BY created_at DESC";
+$stocks = $conn->query($query);
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stock In - Lynntech</title>
+  <title>Stock In</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
-<body class="bg-blue-50 min-h-screen px-6">
+<body class="bg-blue-50 min-h-screen px-4">
 
-  <!-- Navbar -->
-  <?php include 'navbar.php'; ?> 
+<?php include 'navbar.php'; ?>
 
-  <!-- Header Info -->
-  <div class="max-w-6xl ml-64 mx-auto mt-24 bg-white rounded-xl shadow-lg p-6 text-center">
-      <h1 class="text-3xl font-bold text-blue-700 mb-4">STOCK CARDS - QF 18</h1>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-gray-700 text-sm">
-          <div><strong>EFFECTIVE DATE:</strong> 01/11/2024</div>
-          <div><strong>ISSUE DATE:</strong> 25/10/2024</div>
-          <div><strong>REVIEW DATE:</strong> 10/2027</div>
-          <div><strong>ISSUE NO:</strong> 007</div>
-          <div><strong>REVISION NO:</strong> 006</div>
-          <div><strong>MANUAL NO:</strong> LYNNTECH-QP-22</div>
-      </div>
+<div class="max-w-6xl ml-64 mx-auto mt-24 p-6 bg-white rounded-xl shadow-lg">
+  <h2 class="text-2xl font-bold text-blue-700 mb-6 text-center">Stock In - Engineering Products</h2>
+
+  <!-- ✅ Add Stock Form -->
+  <form method="POST" id="stockForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Stock Name</label>
+      <select name="stock_name" id="stock_name" class="w-full border rounded px-3 py-2" required>
+        <option value="">-- Select Engineering Product --</option>
+        <?php while($s = $stockNames->fetch_assoc()): ?>
+          <option value="<?= htmlspecialchars($s['stock_name']) ?>" data-code="<?= htmlspecialchars($s['stock_code']) ?>">
+            <?= htmlspecialchars($s['stock_name']) ?>
+          </option>
+        <?php endwhile; ?>
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Stock Code</label>
+      <input type="text" name="stock_code" id="stock_code" class="w-full border rounded px-3 py-2 bg-gray-100" readonly>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">PO Number (Approved)</label>
+      <select name="po_number" id="po_number" class="w-full border rounded px-3 py-2">
+        <option value="">-- Select PO --</option>
+        <?php while($po = $poQuery->fetch_assoc()): ?>
+          <option value="<?= $po['po_no'] ?>"><?= $po['po_no'] ?></option>
+        <?php endwhile; ?>
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Batch No</label>
+      <input type="text" name="batch_no" class="w-full border rounded px-3 py-2" required>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Quantity</label>
+      <input type="number" step="0.01" name="quantity" id="quantity" class="w-full border rounded px-3 py-2" readonly>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Unit (e.g. pcs, kg)</label>
+      <input type="text" name="unit" id="unit" class="w-full border rounded px-3 py-2" readonly>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Unit Price (Auto)</label>
+      <input type="number" step="0.01" name="unit_price" id="unit_price" class="w-full border rounded px-3 py-2 bg-gray-100" readonly>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Total Cost</label>
+      <input type="number" step="0.01" name="total_cost" id="total_cost" class="w-full border rounded px-3 py-2 bg-gray-100" readonly>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Date Added</label>
+      <input type="date" name="created_at" class="w-full border rounded px-3 py-2" required>
+    </div>
+
+    <div class="md:col-span-2 flex justify-center mt-4">
+      <button type="submit" name="add_stock" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg">
+        Add Stock
+      </button>
+    </div>
+  </form>
+
+  <!-- ✅ Filter Section -->
+  <form method="GET" class="flex flex-wrap gap-4 mb-4 items-end">
+    <div>
+      <label class="text-sm font-medium text-gray-700">From Date</label>
+      <input type="date" name="from_date" value="<?= htmlspecialchars($from_date) ?>" class="border rounded px-3 py-2">
+    </div>
+    <div>
+      <label class="text-sm font-medium text-gray-700">To Date</label>
+      <input type="date" name="to_date" value="<?= htmlspecialchars($to_date) ?>" class="border rounded px-3 py-2">
+    </div>
+    <div>
+      <label class="text-sm font-medium text-gray-700">Search</label>
+      <input type="text" name="search_name" value="<?= htmlspecialchars($search_name) ?>" class="border rounded px-3 py-2" placeholder="Stock or Batch">
+    </div>
+    <div>
+      <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Filter</button>
+    </div>
+  </form>
+
+  <!-- ✅ Stocks Table -->
+  <div class="overflow-x-auto">
+    <table class="w-full border text-sm">
+      <thead class="bg-blue-100">
+        <tr>
+          <th class="border px-2 py-1">Stock</th>
+          <th class="border px-2 py-1">Code</th>
+          <th class="border px-2 py-1">Batch</th>
+          <th class="border px-2 py-1">PO</th>
+          <th class="border px-2 py-1">Qty</th>
+          <th class="border px-2 py-1">Remaining</th>
+          <th class="border px-2 py-1">Unit</th>
+          <th class="border px-2 py-1">Unit Price</th>
+          <th class="border px-2 py-1">Total Cost</th>
+          <th class="border px-2 py-1">Date</th>
+         
+        </tr>
+      </thead>
+      <tbody>
+        <?php if ($stocks->num_rows > 0): ?>
+          <?php while ($row = $stocks->fetch_assoc()): ?>
+          <tr>
+            <td class="border px-2 py-1"><?= htmlspecialchars($row['stock_name']) ?></td>
+            <td class="border px-2 py-1"><?= htmlspecialchars($row['stock_code']) ?></td>
+            <td class="border px-2 py-1"><?= htmlspecialchars($row['batch_no']) ?></td>
+            <td class="border px-2 py-1"><?= htmlspecialchars($row['po_number']) ?></td>
+            <td class="border px-2 py-1"><?= $row['quantity'] ?></td>
+            <td class="border px-2 py-1 text-green-700"><?= $row['quantity'] ?></td>
+            <td class="border px-2 py-1"><?= htmlspecialchars($row['unit']) ?></td>
+            <td class="border px-2 py-1"><?= number_format($row['unit_cost'],2) ?></td>
+            <td class="border px-2 py-1"><?= number_format($row['total_cost'],2) ?></td>
+            <td class="border px-2 py-1"><?= $row['created_at'] ?></td>
+            
+          </tr>
+          <?php endwhile; ?>
+        <?php else: ?>
+          <tr><td colspan="11" class="text-center text-gray-500 py-2">No stock found.</td></tr>
+        <?php endif; ?>
+      </tbody>
+    </table>
   </div>
+</div>
+<script>
+  // ✅ Auto-fill Stock Code
+  $('#stock_name').on('change', function() {
+    const code = $(this).find(':selected').data('code');
+    $('#stock_code').val(code || '');
+  });
 
-  <!-- Message -->
-  <?php if (!empty($message)): ?>
-      <div class="max-w-4xl ml-64 mx-auto mt-4 text-center text-white px-4 py-2 rounded 
-          <?php echo (str_contains($message,'✅')) ? 'bg-green-500' : 'bg-red-500'; ?>">
-          <?= $message ?>
-      </div>
-  <?php endif; ?>
-
-  <!-- Add Stock Form -->
-  <div class="max-w-6xl ml-64 mx-auto mt-6 p-6 bg-white rounded-xl shadow-lg">
-      <h2 class="text-2xl font-bold text-blue-700 mb-6 text-center">Add Stock</h2>
-      <form method="POST" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-              <label class="block text-gray-700 font-medium mb-1">Stock Name</label>
-              <input type="text" name="stock_name" class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-400" required>
-          </div>
-          <div>
-              <label class="block text-gray-700 font-medium mb-1">Stock Code</label>
-              <input type="text" name="stock_code" class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-400" required>
-          </div>
-          <div>
-              <label class="block text-gray-700 font-medium mb-1">Quantity</label>
-              <input type="number" name="quantity" class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-400" placeholder="e.g. 50" required>
-          </div>
-          <div>
-              <label class="block text-gray-700 font-medium mb-1">Unit (kg/litres)</label>
-              <input type="text" name="unit" class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-400" placeholder="e.g. kg or litres" required>
-          </div>
-          <div>
-              <label class="block text-gray-700 font-medium mb-1">Total Cost (KSh)</label>
-              <input type="number" step="0.01" name="total_cost" class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-400" required>
-          </div>
-          <div>
-              <label class="block text-gray-700 font-medium mb-1">Unit Cost (KSh)</label>
-              <input type="number" step="0.01" name="unit_cost" class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-400" required>
-          </div>
-          <div class="md:col-span-3 text-center">
-              <button type="submit" name="add_stock"
-                  class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg shadow-md transition">
-                  Add Stock
-              </button>
-          </div>
-      </form>
-  </div>
-
-  <!-- Existing Stock Table -->
-  <div class="max-w-6xl ml-64 mx-auto mt-8 p-6 bg-white rounded-xl shadow-lg">
-      <h3 class="text-2xl font-bold text-blue-700 mb-4 text-center">Existing Stock</h3>
-      <div class="overflow-x-auto">
-          <table class="min-w-full border border-gray-200 rounded-lg">
-              <thead class="bg-blue-600 text-white">
-                  <tr>
-                      <th class="py-2 px-4 text-left">ID</th>
-                      <th class="py-2 px-4 text-left">Stock Name</th>
-                      <th class="py-2 px-4 text-left">Stock Code</th>
-                      <th class="py-2 px-4 text-left">Quantity</th>
-                      <th class="py-2 px-4 text-left">Unit</th>
-                      <th class="py-2 px-4 text-left">Total Cost</th>
-                      <th class="py-2 px-4 text-left">Unit Cost</th>
-                      <th class="py-2 px-4 text-left">Date Added</th>
-                      <th class="py-2 px-4 text-left">Actions</th>
-                  </tr>
-              </thead>
-              <tbody>
-                  <?php while ($row = $result->fetch_assoc()): ?>
-                      <tr class="border-b hover:bg-blue-50">
-                          <td class="py-2 px-4"><?= $row['id'] ?></td>
-                          <td class="py-2 px-4"><?= htmlspecialchars($row['stock_name']) ?></td>
-                          <td class="py-2 px-4"><?= htmlspecialchars($row['stock_code']) ?></td>
-                          <td class="py-2 px-4"><?= $row['original_quantity'] ?></td>
-                          <td class="py-2 px-4"><?= $row['unit'] ?></td>
-                          <td class="py-2 px-4"><?= number_format($row['total_cost'],2) ?></td>
-                          <td class="py-2 px-4"><?= number_format($row['unit_cost'],2) ?></td>
-                          <td class="py-2 px-4"><?= $row['created_at'] ?></td>
-                          <td class="py-2 px-4">
-                              <button onclick="openEditModal(<?= $row['id'] ?>, '<?= htmlspecialchars($row['stock_name']) ?>', '<?= htmlspecialchars($row['stock_code']) ?>', <?= $row['quantity'] ?>, '<?= $row['unit'] ?>', <?= $row['total_cost'] ?>, <?= $row['unit_cost'] ?>)"
-                                  class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded">
-                                  Edit
-                              </button>
-                          </td>
-                      </tr>
-                  <?php endwhile; ?>
-              </tbody>
-          </table>
-      </div>
-  </div>
-
-  <!-- Edit Modal -->
-  <div id="editModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-      <div class="bg-white rounded-lg p-6 w-96">
-          <h3 class="text-xl font-bold mb-4 text-blue-700">Edit Stock</h3>
-          <form method="POST" id="editForm" class="space-y-3">
-              <input type="hidden" name="id" id="edit_id">
-              <div><label class="block text-gray-700 font-medium">Stock Name</label>
-                  <input type="text" name="stock_name" id="edit_stock_name" class="w-full border rounded px-3 py-2" required>
-              </div>
-              <div><label class="block text-gray-700 font-medium">Stock Code</label>
-                  <input type="text" name="stock_code" id="edit_stock_code" class="w-full border rounded px-3 py-2" required>
-              </div>
-              <div><label class="block text-gray-700 font-medium">Quantity</label>
-                  <input type="number" name="quantity" id="edit_quantity" class="w-full border rounded px-3 py-2" required>
-              </div>
-              <div><label class="block text-gray-700 font-medium">Unit</label>
-                  <input type="text" name="unit" id="edit_unit" class="w-full border rounded px-3 py-2" required>
-              </div>
-              <div><label class="block text-gray-700 font-medium">Total Cost (KSh)</label>
-                  <input type="number" step="0.01" name="total_cost" id="edit_total_cost" class="w-full border rounded px-3 py-2" required>
-              </div>
-              <div><label class="block text-gray-700 font-medium">Unit Cost (KSh)</label>
-                  <input type="number" step="0.01" name="unit_cost" id="edit_unit_cost" class="w-full border rounded px-3 py-2" required>
-              </div>
-              <div class="flex justify-between mt-4">
-                  <button type="submit" name="edit_stock" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Save</button>
-                  <button type="button" onclick="closeEditModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded">Cancel</button>
-              </div>
-          </form>
-      </div>
-  </div>
-
-  <script>
-    function openEditModal(id, name, code, quantity, unit, total_cost, unit_cost) {
-        document.getElementById('edit_id').value = id;
-        document.getElementById('edit_stock_name').value = name;
-        document.getElementById('edit_stock_code').value = code;
-        document.getElementById('edit_quantity').value = quantity;
-        document.getElementById('edit_unit').value = unit;
-        document.getElementById('edit_total_cost').value = total_cost;
-        document.getElementById('edit_unit_cost').value = unit_cost;
-        document.getElementById('editModal').classList.remove('hidden');
+  // ✅ When a P.O is selected, load details
+  $('#po_number').on('change', function() {
+    const poNumber = $(this).val();
+    if (poNumber) {
+      $.ajax({
+        url: 'get_po_details.php',
+        type: 'GET',
+        data: { po_no: poNumber },
+        dataType: 'json',
+        success: function(data) {
+          if (data.success) {
+            $('#quantity').val(data.quantity);
+            $('#unit').val(data.unit);
+            $('#unit_price').val(data.unit_price);
+            $('#total_cost').val((data.quantity * data.unit_price).toFixed(2));
+          } else {
+            alert('No matching PO details found.');
+          }
+        },
+        error: function() {
+          alert('Error loading PO details.');
+        }
+      });
+    } else {
+      $('#quantity, #unit, #unit_price, #total_cost').val('');
     }
-    function closeEditModal() {
-        document.getElementById('editModal').classList.add('hidden');
-    }
-  </script>
+  });
+
+  // ✅ Auto-update total cost when quantity changes
+  $('#quantity').on('input', updateTotal);
+  function updateTotal() {
+    const qty = parseFloat($('#quantity').val()) || 0;
+    const price = parseFloat($('#unit_price').val()) || 0;
+    $('#total_cost').val((qty * price).toFixed(2));
+  }
+</script>
+
+<script>
+// ✅ Auto-fill Stock Code
+$('#stock_name').on('change', function() {
+  const code = $(this).find(':selected').data('code');
+  $('#stock_code').val(code || '');
+});
+
+// ✅ Auto-update total cost
+$('#quantity').on('input', updateTotal);
+function updateTotal() {
+  const qty = parseFloat($('#quantity').val()) || 0;
+  const price = parseFloat($('#unit_price').val()) || 0;
+  $('#total_cost').val((qty * price).toFixed(2));
+}
+</script>
 
 </body>
 </html>

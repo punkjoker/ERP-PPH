@@ -86,9 +86,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_analysis'])) {
     <h3 class="text-lg font-bold text-gray-700 mt-6">Approval Section</h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label class="block text-sm">RM LOT NO</label>
-        <input type="text" name="rm_lot_no" class="w-full border rounded px-3 py-2" required>
-      </div>
+  <label class="block text-sm">RM LOT NO</label>
+  <input 
+    type="text" 
+    name="rm_lot_no" 
+    value="<?= htmlspecialchars($chemical['rm_lot_no']) ?>" 
+    class="w-full border rounded px-3 py-2 bg-gray-100 text-gray-700" 
+    readonly 
+  >
+</div>
+
       <div>
         <label class="block text-sm">Approved Quantity</label>
         <input type="number" step="0.01" name="approved_quantity" class="w-full border rounded px-3 py-2" required>

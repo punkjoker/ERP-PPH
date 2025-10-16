@@ -215,6 +215,23 @@ document.addEventListener("DOMContentLoaded", function () {
                         const price = parseFloat(data.items[i].unit_price || 0);
                         const totalCostInput = document.querySelector(`input[name='chemicals[${i}][total_cost]']`);
                         if (totalCostInput) totalCostInput.value = (scaled * price).toFixed(2);
+                        
+                        // ✅ Real-time remaining quantity update
+        const remainingCell = row.cells[4];
+        const originalRemaining = parseFloat(data.items[i].remaining_quantity ?? 0);
+        const newRemaining = originalRemaining - scaled;
+        // Display and color logic
+        if (remainingCell) {
+            remainingCell.textContent = newRemaining.toFixed(3);
+            if (newRemaining <= 0) {
+                remainingCell.style.color = "red";
+                remainingCell.style.fontWeight = "bold";
+            } else {
+                remainingCell.style.color = "green";
+                remainingCell.style.fontWeight = "normal";
+            }
+        }
+
                     });
                 };
             });

@@ -1,4 +1,4 @@
-<?php
+<?php 
 require 'db_con.php';
 
 // --- Fetch dropdown data ---
@@ -10,7 +10,7 @@ $where = "1=1";
 $params = [];
 $types = "";
 
-// Date filter (From & To)
+// Date filter
 if (!empty($_GET['from_date']) && !empty($_GET['to_date'])) {
     $where .= " AND b.issue_date BETWEEN ? AND ?";
     $params[] = $_GET['from_date'];
@@ -18,27 +18,27 @@ if (!empty($_GET['from_date']) && !empty($_GET['to_date'])) {
     $types .= "ss";
 }
 
-// Chemical filter (dropdown)
+// Chemical name filter
 if (!empty($_GET['chemical_name'])) {
     $where .= " AND ci.chemical_name = ?";
     $params[] = $_GET['chemical_name'];
     $types .= "s";
 }
 
-// Lot No filter (dropdown)
+// Lot No filter
 if (!empty($_GET['rm_lot_no'])) {
     $where .= " AND ci.rm_lot_no = ?";
     $params[] = $_GET['rm_lot_no'];
     $types .= "s";
 }
 
-// --- Query ---
+// --- Main Query ---
 $query = "
     SELECT 
         ci.chemical_name,
         ci.rm_lot_no,
-        ci.std_quantity,
-        ci.remaining_quantity,
+        ci.std_quantity,              -- total issued/standard qty
+        ci.remaining_quantity,        -- remaining qty in stock
         ci.unit_price,
         ci.total_cost,
         ci.date_added,
@@ -50,7 +50,7 @@ $query = "
         bi.quantity_requested,
         bi.total_cost AS used_cost
     FROM bill_of_material_items bi
-    JOIN chemicals_in ci ON bi.chemical_id = ci.id
+    JOIN chemicals_in ci ON bi.chemical_code = ci.chemical_code
     JOIN bill_of_materials b ON bi.bom_id = b.id
     WHERE $where
     ORDER BY ci.chemical_name, b.issue_date DESC
@@ -71,6 +71,7 @@ while ($row = $result->fetch_assoc()) {
     $records[] = $row;
 }
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">

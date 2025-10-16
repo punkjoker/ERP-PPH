@@ -15,14 +15,17 @@
   <nav class="space-y-6 flex-1">
     <div>
       <h3 class="text-blue-700 font-semibold uppercase">HR</h3>
-      <ul class="ml-4 space-y-2 text-sm">
+     <ul class="ml-4 space-y-2 text-sm">
         <li><a href="add_employee.php" class="block hover:bg-blue-200 p-2 rounded">Add Employee</a></li>
         <li><a href="view_employees.php" class="block hover:bg-blue-200 p-2 rounded">View Employees</a></li>
+        <li><a href="employee_information.php" class="block hover:bg-blue-200 p-2 rounded">Employees Information</a></li>
+        <li><a href="perfomance_evaluation_list.php" class="block hover:bg-blue-200 p-2 rounded">Perfomance Evaluation</a></li>
         <li><a href="manage_leaves.php" class="block hover:bg-blue-200 p-2 rounded">Manage Leaves</a></li>
         <li><a href="manage_expenses.php" class="block hover:bg-blue-200 p-2 rounded">Add Expense</a></li>
         <li><a href="add_lunch_expense.php" class="block hover:bg-blue-200 p-2 rounded">Lunch Expense</a></li>
         <li><a href="breakfast_expense.php" class="block hover:bg-blue-200 p-2 rounded">Breakfast Expense</a></li>
         <li><a href="record_training.php" class="block hover:bg-blue-200 p-2 rounded">Record Training</a></li>
+        <li><a href="packaging_request.php" class="block hover:bg-blue-200 p-2 rounded">Packaging Request</a></li>
         <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded">New Item Request</a></li>
         <li><a href="hr_report.php" class="block hover:bg-blue-200 p-2 rounded">HR Report</a></li>
       </ul>

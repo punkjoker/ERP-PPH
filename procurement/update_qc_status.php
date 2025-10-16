@@ -76,6 +76,77 @@ if ($qc_status_query && $qc_status_query->num_rows > 0) {
         </p>
       </div>
     </div>
+<?php
+// ✅ Fetch BOM items
+$sql = "SELECT 
+            i.chemical_name, 
+            i.chemical_code, 
+            i.rm_lot_no, 
+            i.po_number, 
+            i.quantity_requested, 
+            i.unit, 
+            i.unit_price, 
+            i.total_cost
+        FROM bill_of_material_items i
+        WHERE i.bom_id = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("i", $bom_id);
+$stmt->execute();
+$chemicals = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$stmt->close();
+
+// ✅ Calculate total (expected yield)
+$total_quantity_requested = 0;
+$total_cost = 0;
+foreach ($chemicals as $c) {
+    $total_quantity_requested += $c['quantity_requested'];
+    $total_cost += $c['total_cost'];
+}
+
+// ✅ Autofill expected yield in production record
+if (empty($production['expected_yield'])) {
+    $production['expected_yield'] = $total_quantity_requested;
+}
+?>
+
+<!-- ✅ Bill of Materials Section -->
+<section class="mb-8">
+    <h3 class="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Bill of Materials</h3>
+    <div class="overflow-x-auto">
+        <table class="w-full border border-gray-300 text-sm">
+            <thead class="bg-gray-100">
+                <tr>
+                    <th class="border px-3 py-2 text-left">Chemical</th>
+                    <th class="border px-3 py-2 text-left">Chemical Code</th>
+                    <th class="border px-3 py-2 text-left">RM LOT NO</th>
+                    <th class="border px-3 py-2 text-left">PO NO</th>
+                    <th class="border px-3 py-2 text-left">Qty Requested</th>
+                    <th class="border px-3 py-2 text-left">Unit</th>
+                    <th class="border px-3 py-2 text-left">Unit Price</th>
+                    <th class="border px-3 py-2 text-left">Total Cost</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($chemicals as $c): ?>
+                <tr class="hover:bg-gray-50">
+                    <td class="border px-3 py-2"><?= htmlspecialchars($c['chemical_name']) ?></td>
+                    <td class="border px-3 py-2"><?= htmlspecialchars($c['chemical_code']) ?></td>
+                    <td class="border px-3 py-2"><?= htmlspecialchars($c['rm_lot_no']) ?></td>
+                    <td class="border px-3 py-2">PO#<?= htmlspecialchars($c['po_number']) ?></td>
+                    <td class="border px-3 py-2"><?= htmlspecialchars($c['quantity_requested']) ?></td>
+                    <td class="border px-3 py-2"><?= htmlspecialchars($c['unit']) ?></td>
+                    <td class="border px-3 py-2"><?= number_format($c['unit_price'], 2) ?></td>
+                    <td class="border px-3 py-2"><?= number_format($c['total_cost'], 2) ?></td>
+                </tr>
+                <?php endforeach; ?>
+                <tr class="bg-gray-100 font-semibold">
+                    <td colspan="7" class="text-right border px-3 py-2">Total Production Cost</td>
+                    <td class="border px-3 py-2"><?= number_format($total_cost, 2) ?></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
 
     <!-- ✅ Procedures List -->
     <div class="bg-white shadow-lg rounded-lg p-6 border mb-8">
@@ -109,119 +180,88 @@ if ($qc_status_query && $qc_status_query->num_rows > 0) {
     </div>
 
     <!-- ✅ QC Inspection Form -->
-    <form action="save_qc_inspection.php" method="POST"
-      x-data="{
-        tests: [],
-        approved: '<?= $current_qc_status ?>' === 'Approved Product',
-        packs: [{item:'',issued:'',used:'',wasted:'',balance:'',qty:'',yield:'',unit:'',cost:'',total:''}]
-      }">
+<form action="save_qc_inspection.php" method="POST"
+  x-data="{
+    tests: [],
+    approved: '<?= $current_qc_status ?>' === 'Approved Product'
+  }">
 
-      <input type="hidden" name="production_run_id" value="<?= $production['id'] ?>">
+  <input type="hidden" name="production_run_id" value="<?= $production['id'] ?>">
 
-      <!-- QC Tests -->
-      <div class="bg-white p-6 rounded-lg shadow mb-6">
-        <h2 class="text-lg font-bold mb-4 text-blue-700">Quality Control Tests</h2>
-        <template x-for="(t,i) in tests" :key="i">
-          <div class="grid grid-cols-3 gap-4 mb-3">
-            <input type="text" x-model="t.test" name="tests[]" placeholder="Test Name" class="border p-2 rounded">
-            <input type="text" x-model="t.spec" name="specs[]" placeholder="Specification" class="border p-2 rounded">
-            <input type="text" x-model="t.proc" name="procedures[]" placeholder="results" class="border p-2 rounded">
-          </div>
-        </template>
-        <button type="button" @click="tests.push({test:'',spec:'',proc:''})" class="bg-blue-500 text-white px-3 py-1 rounded text-sm">+ Add Test</button>
+  <!-- QC Tests -->
+  <div class="bg-white p-6 rounded-lg shadow mb-6">
+    <h2 class="text-lg font-bold mb-4 text-blue-700">Quality Control Tests</h2>
+    <template x-for="(t,i) in tests" :key="i">
+      <div class="grid grid-cols-3 gap-4 mb-3">
+        <input type="text" x-model="t.test" name="tests[]" placeholder="Test Name" class="border p-2 rounded">
+        <input type="text" x-model="t.spec" name="specs[]" placeholder="Specification" class="border p-2 rounded">
+        <input type="text" x-model="t.proc" name="procedures[]" placeholder="Results" class="border p-2 rounded">
       </div>
-
-      <!-- QC Status -->
-      <div class="bg-white p-6 rounded-lg shadow mb-6">
-        <label class="block font-semibold text-gray-700 mb-2">QC Status</label>
-        <select name="qc_status"
-                @change="approved = ($event.target.value === 'Approved Product')"
-                class="border p-2 rounded w-full">
-          <option value="Not Approved" <?= $current_qc_status == 'Not Approved' ? 'selected' : '' ?>>Not Approved</option>
-          <option value="Approved Product" <?= $current_qc_status == 'Approved Product' ? 'selected' : '' ?>>Approved Product</option>
-        </select>
-      </div>
-
-      <!-- Packaging Reconciliation + RM Lot No -->
-      <div class="bg-white p-6 rounded-lg shadow mb-6" x-show="approved">
-        <h2 class="text-lg font-bold mb-4 text-green-700">Packaging Reconciliation</h2>
-        <template x-for="(p,i) in packs" :key="i">
-          <div class="grid grid-cols-10 gap-2 mb-2 text-sm">
-            <input x-model="p.item" name="item[]" placeholder="Item" class="border p-1 rounded">
-            <input x-model="p.issued" name="issued[]" placeholder="Issued" class="border p-1 rounded">
-            <input x-model="p.used" name="used[]" placeholder="Used" class="border p-1 rounded">
-            <input x-model="p.wasted" name="wasted[]" placeholder="Wasted" class="border p-1 rounded">
-            <input x-model="p.balance" name="balance[]" placeholder="Balance" class="border p-1 rounded">
-            <input x-model="p.qty" name="qty[]" placeholder="Qty Achieved" class="border p-1 rounded">
-            <input x-model="p.yield" name="yield[]" placeholder="%Yield" class="border p-1 rounded">
-            <input x-model="p.unit" name="unit[]" placeholder="Units" class="border p-1 rounded">
-            <input x-model="p.cost" name="cost[]" placeholder="Cost/Unit" class="border p-1 rounded">
-            <input x-model="p.total" name="total[]" placeholder="Total" class="border p-1 rounded">
-          </div>
-        </template>
-        <button type="button" @click="packs.push({})" class="bg-blue-500 text-white px-3 py-1 rounded text-sm mb-4">+ Add Item</button>
-
-        <!-- RM Lot Number Assignment -->
-         <!--
-        <div class="mt-4">
-          <label for="rm_lot_no" class="block font-semibold text-gray-700 mb-2">RM LOT NO (Finished Product)</label>
-          <input type="text" id="rm_lot_no" name="rm_lot_no" placeholder="Enter RM LOT NO..." class="border p-2 rounded w-full">
-        </div>
-      </div>
-      -->
-
-      <!-- Manager Checklist -->
-      <div class="bg-white p-6 rounded-lg shadow mb-6">
-        <h2 class="text-lg font-bold mb-4 text-gray-800">Quality Manager Review</h2>
-        <table class="min-w-full text-sm border">
-          <thead class="bg-gray-100">
-            <tr>
-              <th class="border px-2 py-1">No.</th>
-              <th class="border px-2 py-1">Checklist</th>
-              <th class="border px-2 py-1">Yes</th>
-              <th class="border px-2 py-1">No</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php
-              $checklist = [
-                "All production processes have been fully followed and complied",
-                "Quality Control Processes have been fully followed.",
-                "All QC reports are duly filled, recorded, and signed.",
-                "Final product complies with standard specifications.",
-                "Final product complies with packaging specifications.",
-                "Retain sample collected and stored.",
-                "All blank spaces have been fully filled.",
-                "Certificate of Analysis complies with test results.",
-                "Product released for sale."
-              ];
-              foreach ($checklist as $i => $item) {
-                echo "
-                  <tr>
-                    <td class='border px-2 py-1 text-center'>".($i+1)."</td>
-                    <td class='border px-2 py-1'>$item</td>
-                    <td class='border px-2 py-1 text-center'><input type='radio' name='checklist_$i' value='Yes'></td>
-                    <td class='border px-2 py-1 text-center'><input type='radio' name='checklist_$i' value='No'></td>
-                  </tr>
-                ";
-              }
-            ?>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Submit -->
-      <div class="flex justify-end space-x-4">
-        <a href="inspect_finished_products.php" class="bg-gray-500 text-white px-6 py-2 rounded-lg shadow hover:bg-gray-600">
-          ← Back
-        </a>
-
-        <button type="submit" class="bg-green-600 text-white px-6 py-2 rounded-lg shadow hover:bg-green-700">
-          Save QC Data
-        </button>
-      </div>
-
-    </form>
+    </template>
+    <button type="button" @click="tests.push({test:'',spec:'',proc:''})" class="bg-blue-500 text-white px-3 py-1 rounded text-sm">+ Add Test</button>
   </div>
+
+  <!-- Quality Manager Review -->
+  <div class="bg-white p-6 rounded-lg shadow mb-6">
+    <h2 class="text-lg font-bold mb-4 text-gray-800">Quality Manager Review</h2>
+    <table class="min-w-full text-sm border">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="border px-2 py-1">No.</th>
+          <th class="border px-2 py-1">Checklist</th>
+          <th class="border px-2 py-1">Yes</th>
+          <th class="border px-2 py-1">No</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php
+          $checklist = [
+            "All production processes have been fully followed and complied",
+            "Quality Control Processes have been fully followed.",
+            "All QC reports are duly filled, recorded, and signed.",
+            "Final product complies with standard specifications.",
+            "Final product complies with packaging specifications.",
+            "Retain sample collected and stored.",
+            "All blank spaces have been fully filled.",
+            "Certificate of Analysis complies with test results.",
+            "Product released for sale."
+          ];
+          foreach ($checklist as $i => $item) {
+            echo "
+              <tr>
+                <td class='border px-2 py-1 text-center'>".($i+1)."</td>
+                <td class='border px-2 py-1'>$item</td>
+                <td class='border px-2 py-1 text-center'><input type='radio' name='checklist_$i' value='Yes'></td>
+                <td class='border px-2 py-1 text-center'><input type='radio' name='checklist_$i' value='No'></td>
+              </tr>
+            ";
+          }
+        ?>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- QC Status (moved here) -->
+  <div class="bg-white p-6 rounded-lg shadow mb-6">
+    <label class="block font-semibold text-gray-700 mb-2">Final QC Status</label>
+    <select name="qc_status"
+            @change="approved = ($event.target.value === 'Approved Product')"
+            class="border p-2 rounded w-full">
+      <option value="Not Approved" <?= $current_qc_status == 'Not Approved' ? 'selected' : '' ?>>Not Approved</option>
+      <option value="Approved Product" <?= $current_qc_status == 'Approved Product' ? 'selected' : '' ?>>Approved Product</option>
+    </select>
+  </div>
+
+  <!-- Submit -->
+  <div class="flex justify-end space-x-4">
+    <a href="inspect_finished_products.php" class="bg-gray-500 text-white px-6 py-2 rounded-lg shadow hover:bg-gray-600">
+      ← Back
+    </a>
+    <button type="submit" class="bg-green-600 text-white px-6 py-2 rounded-lg shadow hover:bg-green-700">
+      Save QC Data
+    </button>
+  </div>
+</form>
+</div>
 </body>
 </html>

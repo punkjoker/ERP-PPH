@@ -23,14 +23,21 @@ if ($proc_result && $proc_result->num_rows > 0) {
   }
 }
 
-// ✅ Fetch QC inspections for this production
+// ✅ Fetch QC tests from the qc_tests table
 $qc_tests = [];
-$qc_result = $conn->query("SELECT * FROM qc_inspections WHERE production_run_id = {$production['id']}");
+$qc_result = $conn->query("
+  SELECT t.*, i.qc_status
+  FROM qc_tests t
+  JOIN qc_inspections i ON t.qc_inspection_id = i.id
+  WHERE i.production_run_id = {$production['id']}
+  ORDER BY t.created_at ASC
+");
 if ($qc_result && $qc_result->num_rows > 0) {
   while ($row = $qc_result->fetch_assoc()) {
     $qc_tests[] = $row;
   }
 }
+
 
 // ✅ Fetch packaging reconciliation (linked to qc_inspections)
 $packs = [];
@@ -45,6 +52,54 @@ if ($pack_result && $pack_result->num_rows > 0) {
     $packs[] = $row;
   }
 }
+// ✅ Fetch Bill of Materials (BOM) data for this product
+$bom_stmt = $conn->prepare("
+  SELECT b.id, b.product_id, p.name AS product_name, b.status, b.description,
+         b.requested_by, b.bom_date, b.issued_by, b.remarks, b.issue_date
+  FROM bill_of_materials b
+  JOIN products p ON b.product_id = p.id
+  WHERE b.id = ?
+");
+$bom_stmt->bind_param("i", $bom_id);
+$bom_stmt->execute();
+$bom = $bom_stmt->get_result()->fetch_assoc();
+$bom_stmt->close();
+
+// ✅ Fetch BOM raw materials (chemicals)
+$chem_stmt = $conn->prepare("
+  SELECT i.chemical_id, c.chemical_name, i.quantity_requested, i.unit, 
+         i.unit_price, i.total_cost, i.rm_lot_no
+  FROM bill_of_material_items i
+  JOIN chemicals_in c ON i.chemical_id = c.id
+  WHERE i.bom_id = ?
+");
+$chem_stmt->bind_param("i", $bom_id);
+$chem_stmt->execute();
+$chemicals = $chem_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$chem_stmt->close();
+
+// ✅ Fetch packaging materials (linked to BOM)
+// ✅ Fetch packaging items linked to this production run
+$pack_stmt = $conn->prepare("
+  SELECT m.material_name, p.pack_size, p.units, unpackaged_qty, p.quantity_used, p.cost_per_unit, p.total_cost, p.status
+  FROM packaging p
+  JOIN materials m ON p.material_id = m.id
+  WHERE p.production_run_id = ?
+");
+$pack_stmt->bind_param("i", $production['id']);
+$pack_stmt->execute();
+$packaging_items = $pack_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$pack_stmt->close();
+
+$first_pack = $packaging_items[0] ?? null; // null if no packaging exists
+
+// ✅ Calculate total packaging cost
+$total_packaging_cost = 0;
+foreach ($packaging_items as $pack) {
+    $total_packaging_cost += $pack['total_cost'];
+}
+
+
 ?>
 
 <!DOCTYPE html>
@@ -94,6 +149,159 @@ if ($pack_result && $pack_result->num_rows > 0) {
         </p>
       </div>
     </div>
+<!-- ✅ Bill of Materials -->
+<div class="bg-white shadow-lg rounded-lg p-6 border mb-8">
+  <h2 class="text-2xl font-semibold text-blue-800 mb-4 border-b pb-2">Bill of Materials (BOM)</h2>
+
+ <div class="grid grid-cols-2 gap-6 text-sm mb-6">
+    <p><span class="font-medium text-gray-700">Requested By:</span> <?= htmlspecialchars($bom['requested_by']) ?></p>
+    <p><span class="font-medium text-gray-700">Issued By:</span> <?= htmlspecialchars($bom['issued_by']) ?></p>
+    <p><span class="font-medium text-gray-700">BOM Date:</span> <?= htmlspecialchars($bom['bom_date']) ?></p>
+    <p><span class="font-medium text-gray-700">Issue Date:</span> <?= htmlspecialchars($bom['issue_date']) ?></p>
+    <p><span class="font-medium text-gray-700">Remarks:</span> <?= htmlspecialchars($bom['remarks']) ?></p>
+
+    <?php if($first_pack): ?>
+        <p>
+            <span class="font-medium text-gray-700">Obtained Pack Size:</span>
+            <?= htmlspecialchars($first_pack['pack_size'] . ' ' . $first_pack['units']) ?>,
+            <?= htmlspecialchars($first_pack['quantity_used']) ?> packed
+        </p>
+        <p>
+            <span class="font-medium text-gray-700">Remaining Unpacked:</span>
+            <?= htmlspecialchars($first_pack['unpackaged_qty'] . ' ' . $first_pack['units']) ?>
+        </p>
+    <?php else: ?>
+        <p><span class="font-medium text-gray-700">Obtained Pack Size:</span> Not recorded yet</p>
+        <p><span class="font-medium text-gray-700">Remaining Unpacked:</span> Not recorded yet</p>
+    <?php endif; ?>
+</div>
+
+  <?php
+// ✅ Fetch BOM items
+$sql = "SELECT 
+            i.chemical_name, 
+            i.chemical_code, 
+            i.rm_lot_no, 
+            i.po_number, 
+            i.quantity_requested, 
+            i.unit, 
+            i.unit_price, 
+            i.total_cost
+        FROM bill_of_material_items i
+        WHERE i.bom_id = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("i", $bom_id);
+$stmt->execute();
+$chemicals = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$stmt->close();
+
+// ✅ Calculate total (expected yield)
+$total_quantity_requested = 0;
+$total_cost = 0;
+foreach ($chemicals as $c) {
+    $total_quantity_requested += $c['quantity_requested'];
+    $total_cost += $c['total_cost'];
+}
+
+// ✅ Autofill expected yield in production record
+if (empty($production['expected_yield'])) {
+    $production['expected_yield'] = $total_quantity_requested;
+}
+$total_production_cost = $total_cost + $total_packaging_cost;
+
+?>
+
+<!-- ✅ Bill of Materials Section -->
+<section class="mb-8">
+    <h3 class="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Bill of Materials</h3>
+    <div class="overflow-x-auto">
+        <table class="w-full border border-gray-300 text-sm">
+            <thead class="bg-gray-100">
+                <tr>
+                    <th class="border px-3 py-2 text-left">Chemical</th>
+                    <th class="border px-3 py-2 text-left">Chemical Code</th>
+                    <th class="border px-3 py-2 text-left">RM LOT NO</th>
+                    <th class="border px-3 py-2 text-left">PO NO</th>
+                    <th class="border px-3 py-2 text-left">Qty Requested</th>
+                    <th class="border px-3 py-2 text-left">Unit</th>
+                    <th class="border px-3 py-2 text-left">Unit Price</th>
+                    <th class="border px-3 py-2 text-left">Total Cost</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($chemicals as $c): ?>
+                <tr class="hover:bg-gray-50">
+                    <td class="border px-3 py-2"><?= htmlspecialchars($c['chemical_name']) ?></td>
+                    <td class="border px-3 py-2"><?= htmlspecialchars($c['chemical_code']) ?></td>
+                    <td class="border px-3 py-2"><?= htmlspecialchars($c['rm_lot_no']) ?></td>
+                    <td class="border px-3 py-2">PO#<?= htmlspecialchars($c['po_number']) ?></td>
+                    <td class="border px-3 py-2"><?= htmlspecialchars($c['quantity_requested']) ?></td>
+                    <td class="border px-3 py-2"><?= htmlspecialchars($c['unit']) ?></td>
+                    <td class="border px-3 py-2"><?= number_format($c['unit_price'], 2) ?></td>
+                    <td class="border px-3 py-2"><?= number_format($c['total_cost'], 2) ?></td>
+                </tr>
+                <?php endforeach; ?>
+                <tr class="bg-gray-100 font-semibold">
+                    <td colspan="7" class="text-right border px-3 py-2">Total Production Cost</td>
+                    <td class="border px-3 py-2"><?= number_format($total_cost, 2) ?></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+  <!-- ✅ Packaging Reconciliation -->
+<section class="mb-8">
+    <h3 class="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Packaging Reconciliation</h3>
+    <div class="overflow-x-auto">
+        <table class="w-full border border-gray-300 text-sm">
+            <thead class="bg-gray-100">
+                <tr>
+                    <th class="border px-3 py-2">Item Name</th>
+                    <th class="border px-3 py-2">Units</th>
+                    <th class="border px-3 py-2">Quantity Packed</th>
+                    <th class="border px-3 py-2">Cost per Unit</th>
+                    <th class="border px-3 py-2">Total Cost</th>
+                    <th class="border px-3 py-2">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if(count($packaging_items) > 0): ?>
+                    <?php foreach ($packaging_items as $pack): ?>
+                        <tr class="hover:bg-gray-50">
+                            <td class="border px-3 py-2"><?= htmlspecialchars($pack['material_name']) ?></td>
+                            <td class="border px-3 py-2">
+    <?= htmlspecialchars($pack['pack_size'] . ' ' . $pack['units']) ?>
+</td>
+
+                            <td class="border px-3 py-2"><?= htmlspecialchars($pack['quantity_used']) ?></td>
+                            <td class="border px-3 py-2"><?= number_format($pack['cost_per_unit'], 2) ?></td>
+                            <td class="border px-3 py-2"><?= number_format($pack['total_cost'], 2) ?></td>
+                            <td class="border px-3 py-2 font-semibold 
+                                <?= $pack['status'] == 'Approved' ? 'text-green-600' : ($pack['status']=='Rejected' ? 'text-red-600' : 'text-gray-500') ?>">
+                                <?= htmlspecialchars($pack['status']) ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="6" class="text-center py-3 text-gray-500">No packaging items recorded.</td>
+                    </tr>
+                <?php endif; ?>
+                <tr class="bg-gray-100 font-semibold">
+                    <td colspan="4" class="text-right border px-3 py-2">Total Packaging Cost</td>
+                    <td class="border px-3 py-2"><?= number_format($total_packaging_cost, 2) ?></td>
+                    <td class="border px-3 py-2"></td>
+                </tr>
+                <tr class="bg-gray-200 font-bold">
+                    <td colspan="4" class="text-right border px-3 py-2">TOTAL PRODUCTION COST (BOM + Packaging)</td>
+                    <td class="border px-3 py-2"><?= number_format($total_production_cost, 2) ?></td>
+                    <td class="border px-3 py-2"></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
 
     <!-- ✅ Procedures -->
     <div class="bg-white shadow-lg rounded-lg p-6 border mb-8">
@@ -159,46 +367,7 @@ if ($pack_result && $pack_result->num_rows > 0) {
       <?php endif; ?>
     </div>
 
-    <!-- ✅ Packaging Reconciliation -->
-    <div class="bg-white shadow-lg rounded-lg p-6 border mb-8">
-      <h2 class="text-lg font-bold mb-4 text-green-700">Packaging Reconciliation</h2>
-      <?php if (count($packs) > 0): ?>
-        <table class="min-w-full border text-sm">
-          <thead class="bg-green-100">
-            <tr>
-              <th class="border px-3 py-1">Item</th>
-              <th class="border px-3 py-1">Issued</th>
-              <th class="border px-3 py-1">Used</th>
-              <th class="border px-3 py-1">Wasted</th>
-              <th class="border px-3 py-1">Balance</th>
-              <th class="border px-3 py-1">Qty Achieved</th>
-              <th class="border px-3 py-1">% Yield</th>
-              <th class="border px-3 py-1">Units</th>
-              <th class="border px-3 py-1">Cost/Unit</th>
-              <th class="border px-3 py-1">Total Cost</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php foreach ($packs as $p): ?>
-              <tr>
-                <td class="border px-3 py-1"><?= htmlspecialchars($p['item_name']) ?></td>
-                <td class="border px-3 py-1"><?= htmlspecialchars($p['issued']) ?></td>
-                <td class="border px-3 py-1"><?= htmlspecialchars($p['used']) ?></td>
-                <td class="border px-3 py-1"><?= htmlspecialchars($p['wasted']) ?></td>
-                <td class="border px-3 py-1"><?= htmlspecialchars($p['balance']) ?></td>
-                <td class="border px-3 py-1"><?= htmlspecialchars($p['quantity_achieved']) ?></td>
-                <td class="border px-3 py-1"><?= htmlspecialchars($p['yield_percent']) ?></td>
-                <td class="border px-3 py-1"><?= htmlspecialchars($p['units']) ?></td>
-                <td class="border px-3 py-1"><?= htmlspecialchars($p['cost_per_unit']) ?></td>
-                <td class="border px-3 py-1"><?= htmlspecialchars($p['total_cost']) ?></td>
-              </tr>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
-      <?php else: ?>
-        <p class="text-gray-500 italic">No packaging reconciliation recorded yet.</p>
-      <?php endif; ?>
-    </div>
+    
     <!-- ✅ Quality Manager Review -->
     <?php
     $review = $conn->query("

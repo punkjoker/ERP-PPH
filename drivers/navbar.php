@@ -14,8 +14,8 @@
     <div>
       <h3 class="text-blue-700 font-semibold uppercase">Drivers</h3>
       <ul class="ml-4 space-y-2 text-sm">
-        <li><a href="add_vehicle.php" class="block hover:bg-blue-200 p-2 rounded">Manage Vehicles</a></li>
-        <li><a href="pending_deliveries.php" class="block hover:bg-blue-200 p-2 rounded">Pending Deliveries</a></li>
+        <li><a href="add_vehicle.php" class="block hover:bg-blue-200 p-2 rounded">Manage vehicles</a></li>
+         <li><a href="pending_deliveries.php" class="block hover:bg-blue-200 p-2 rounded">Pending Deliveries</a></li>
         <li><a href="delivered_orders.php" class="block hover:bg-blue-200 p-2 rounded">Delivered</a></li>
         <li><a href="manage_trips.php" class="block hover:bg-blue-200 p-2 rounded">Manage Trips</a></li>
         <li><a href="vehicle_maintenance.php" class="block hover:bg-blue-200 p-2 rounded">Vehicle Maintenance Costs</a></li>

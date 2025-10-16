@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_chemical'])) {
 $poQuery = $conn->query("SELECT id, po_no FROM po_list WHERE status = 1 ORDER BY created_at DESC");
 
 // ✅ Fetch chemical names
-$chemNames = $conn->query("SELECT chemical_name, chemical_code FROM chemical_names ORDER BY chemical_name ASC");
+$chemNames = $conn->query("SELECT chemical_name, chemical_code FROM chemical_names WHERE main_category = 'Chemicals' ORDER BY chemical_name ASC");
 
 // ✅ Filters
 $from_date = $_GET['from_date'] ?? '';
