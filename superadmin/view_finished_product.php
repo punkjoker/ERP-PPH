@@ -4,7 +4,7 @@ include 'db_con.php';
 $bom_id = $_GET['id'] ?? 0;
 
 // ✅ Fetch production + product + QC details
-$sql = "SELECT pr.*, p.name AS product_name, bom.requested_by, bom.description, bom.bom_date, qc.created_at AS qc_date
+$sql = "SELECT pr.*, p.name AS product_name, bom.requested_by, bom.description, bom.bom_date, bom.batch_number, qc.created_at AS qc_date
         FROM production_runs pr
         JOIN bill_of_materials bom ON pr.request_id = bom.id
         JOIN products p ON bom.product_id = p.id
@@ -55,7 +55,7 @@ if ($pack_result && $pack_result->num_rows > 0) {
 // ✅ Fetch Bill of Materials (BOM) data for this product
 $bom_stmt = $conn->prepare("
   SELECT b.id, b.product_id, p.name AS product_name, b.status, b.description,
-         b.requested_by, b.bom_date, b.issued_by, b.remarks, b.issue_date
+         b.requested_by, b.bom_date, b.issued_by, b.remarks, b.issue_date, b.batch_number
   FROM bill_of_materials b
   JOIN products p ON b.product_id = p.id
   WHERE b.id = ?
@@ -121,6 +121,9 @@ foreach ($packaging_items as $pack) {
         <h1 class="text-2xl font-bold text-gray-800">FINISHED PRODUCT DETAILS</h1>
         <p class="text-sm text-gray-600">PRODUCT NAME:
           <span class="font-semibold text-blue-700"><?= htmlspecialchars($production['product_name']) ?></span>
+        </p>
+        <p class="text-sm text-gray-600">BATCH NUMBER:
+          <span class="font-semibold text-blue-700"><?= htmlspecialchars($production['batch_number']) ?></span>
         </p>
         <p class="text-sm text-gray-600">REQUESTED BY:
           <span class="font-semibold"><?= htmlspecialchars($production['requested_by']) ?></span>

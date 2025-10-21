@@ -9,7 +9,7 @@ if (!$run_id) {
 
 // ✅ Fetch product details linked to this production run
 $productQuery = $conn->prepare("
-    SELECT p.id AS product_id, p.name AS product_name
+    SELECT p.id AS product_id, p.name AS product_name, b.batch_number, pr.obtained_yield
     FROM production_runs pr
     JOIN bill_of_materials b ON pr.request_id = b.id
     JOIN products p ON b.product_id = p.id
@@ -26,6 +26,8 @@ if ($productResult->num_rows === 0) {
 $productRow = $productResult->fetch_assoc();
 $product_id = $productRow['product_id'];
 $product_name = $productRow['product_name'];
+$batch_number = $productRow['batch_number'];
+$obtained_yield = $productRow['obtained_yield'];
 $productQuery->close();
 
 // ✅ Initialize totals for updating products later
@@ -89,6 +91,7 @@ foreach ($_POST['material_id'] as $i => $mat_id) {
 
 // ✅ Update product stock quantities
 if ($product_id && $total_quantity_used > 0) {
+
     // Fetch existing product data
     $check = $conn->prepare("SELECT * FROM products WHERE id = ?");
     $check->bind_param("i", $product_id);
@@ -101,20 +104,37 @@ if ($product_id && $total_quantity_used > 0) {
         $new_remaining = ($existing['remaining_quantity'] ?? 0) + $total_quantity_used;
         $new_obtained = ($existing['obtained_quantity'] ?? 0) + $total_quantity_used;
 
-        // Update the product record
+        // ✅ (Optional) Update product if needed
         $update = $conn->prepare("
             UPDATE products 
-            SET 
-                remaining_quantity = ?, 
-                obtained_quantity = ?, 
-                pack_size = ?, 
-                unit = ?
+            SET remaining_quantity = ?, obtained_quantity = ?
             WHERE id = ?
         ");
-        $update->bind_param("dddsi", $new_remaining, $new_obtained, $first_pack_size, $first_unit, $product_id);
+        $update->bind_param("ddi", $new_remaining, $new_obtained, $product_id);
         $update->execute();
         $update->close();
     }
+}
+
+// ✅ Insert finished product record with product_id
+if ($product_name && $batch_number) {
+    $insert = $conn->prepare("
+        INSERT INTO finished_products 
+        (product_id, product_name, batch_number, obtained_yield, unit, pack_size, remaining_size)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ");
+    $insert->bind_param(
+        "issdsdd",
+        $product_id,
+        $product_name,
+        $batch_number,
+        $obtained_yield,
+        $first_unit,
+        $first_pack_size,
+        $first_pack_size
+    );
+    $insert->execute();
+    $insert->close();
 }
 
 // ✅ Redirect to list page with success message

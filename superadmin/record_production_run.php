@@ -5,7 +5,7 @@ include 'db_con.php';
 $from_date = isset($_GET['from_date']) ? $_GET['from_date'] : '';
 $to_date   = isset($_GET['to_date']) ? $_GET['to_date'] : '';
 
-$query = "SELECT bom.id, bom.bom_date, bom.requested_by, bom.description, 
+$query = "SELECT bom.id, bom.bom_date, bom.requested_by, bom.description, bom.batch_number,
                  p.name AS product_name,
                  pr.status AS production_status
           FROM bill_of_materials bom
@@ -60,6 +60,7 @@ $result = $conn->query($query);
             <tr class="bg-gray-100 text-gray-700 uppercase text-xs">
               <th class="py-2 px-3 border">Date</th>
               <th class="py-2 px-3 border">Product Name</th>
+              <th class="py-2 px-3 border">Batch Number</th>
               <th class="py-2 px-3 border">Requested By</th>
               <th class="py-2 px-3 border">Description</th>
               <th class="py-2 px-3 border">Production Status</th>
@@ -79,6 +80,7 @@ $result = $conn->query($query);
               <tr class="hover:bg-gray-50 transition">
                 <td class="py-2 px-3 border"><?php echo htmlspecialchars($row['bom_date']); ?></td>
                 <td class="py-2 px-3 border"><?php echo htmlspecialchars($row['product_name']); ?></td>
+                <td class="py-2 px-3 border"><?php echo htmlspecialchars($row['batch_number']); ?></td>
                 <td class="py-2 px-3 border"><?php echo htmlspecialchars($row['requested_by']); ?></td>
                 <td class="py-2 px-3 border"><?php echo htmlspecialchars($row['description']); ?></td>
                 <td class="py-2 px-3 border"><?php echo $status_text; ?></td>

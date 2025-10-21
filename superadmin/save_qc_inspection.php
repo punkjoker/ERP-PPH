@@ -76,32 +76,6 @@ if ($qc_status === 'Approved Product' && isset($_POST['item'])) {
     }
 }
 
-// ✅ Step 4: Quality Manager Review
-$checklist_items = [
-  "All production processes have been fully followed and complied",
-  "Quality Control Processes have been fully followed.",
-  "All QC reports are duly filled, recorded, and signed.",
-  "Final product complies with standard specifications.",
-  "Final product complies with packaging specifications.",
-  "Retain sample collected and stored.",
-  "All blank spaces have been fully filled.",
-  "Certificate of Analysis complies with test results.",
-  "Product released for sale."
-];
-
-foreach ($_POST as $key => $val) {
-    if (strpos($key, 'checklist_') === 0) {
-        $num = intval(explode('_', $key)[1]);
-        $item = $checklist_items[$num] ?? '';
-        $stmt = $conn->prepare("
-            INSERT INTO quality_manager_review (qc_inspection_id, checklist_no, checklist_item, response)
-            VALUES (?, ?, ?, ?)
-        ");
-        $stmt->bind_param("iiss", $qc_id, $num, $item, $val);
-        $stmt->execute();
-        $stmt->close();
-    }
-}
 
 // ✅ Redirect
 header("Location: inspect_finished_products.php?msg=QC+inspection+saved");
