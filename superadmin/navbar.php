@@ -63,6 +63,7 @@
       <ul class="ml-4 space-y-2 text-sm">
         <li><a href="inspect_raw_materials.php" class="block hover:bg-blue-200 p-2 rounded">Inspect Chemicals In</a></li>
         <li><a href="inspect_finished_products.php" class="block hover:bg-blue-200 p-2 rounded">Inspect Finished Products</a></li>
+         <li><a href="quality_manager_review.php" class="block hover:bg-blue-200 p-2 rounded">Quality Manager Review</a></li>
         <li><a href="record_production_run.php" class="block hover:bg-blue-200 p-2 rounded">View Production Runs</a></li>
         <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded">New Item Request</a></li>
         <li><a href="disposables.php" class="block hover:bg-blue-200 p-2 rounded">Disposals</a></li>
@@ -88,6 +89,9 @@
         <li><a href="view_inventory.php" class="block hover:bg-blue-200 p-2 rounded">View Inventory</a></li>
         <li><a href="bill_of_material_history.php" class="block hover:bg-blue-200 p-2 rounded">View Bill Of Material</a></li>
          <li><a href="order_deliveries.php" class="block hover:bg-blue-200 p-2 rounded">Create Delivery</a></li>
+         <li><a href="create_order_delivery.php" class="block hover:bg-blue-200 p-2 rounded">Create order</a></li>
+         <li><a href="all_delivery_order_items.php" class="block hover:bg-blue-200 p-2 rounded">View all orders list</a></li>
+         <li><a href="delivery_details.php" class="block hover:bg-blue-200 p-2 rounded">Delivery details</a></li>
         <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded">New Item Request</a></li>
         <li><a href="store_reports.php" class="block hover:bg-blue-200 p-2 rounded">Reports</a></li>
       </ul>

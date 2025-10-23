@@ -314,10 +314,11 @@ if (empty($production['expected_yield'])) {
     <!-- ✅ Quality Manager Review -->
     <?php
     $review = $conn->query("
-      SELECT * FROM quality_manager_review 
-      WHERE qc_inspection_id IN (SELECT id FROM qc_inspections WHERE production_run_id = {$production['id']})
-      ORDER BY checklist_no ASC
-    ");
+  SELECT * FROM quality_manager_review 
+  WHERE production_run_id = {$production['id']}
+  ORDER BY checklist_no ASC
+");
+
     ?>
     <div class="bg-white shadow-lg rounded-lg p-6 border mb-8">
       <h2 class="text-lg font-bold mb-4 text-purple-700">Quality Manager Review</h2>

@@ -116,22 +116,23 @@ if ($product_id && $total_quantity_used > 0) {
     }
 }
 
-// ✅ Insert finished product record with product_id
+// ✅ Insert finished product record with product_id and production_run_id
 if ($product_name && $batch_number) {
     $insert = $conn->prepare("
         INSERT INTO finished_products 
-        (product_id, product_name, batch_number, obtained_yield, unit, pack_size, remaining_size)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        (production_run_id, product_id, product_name, batch_number, obtained_yield, unit, pack_size, remaining_size)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ");
     $insert->bind_param(
-        "issdsdd",
+        "iissdsdd",
+        $run_id,
         $product_id,
         $product_name,
         $batch_number,
         $obtained_yield,
         $first_unit,
         $first_pack_size,
-        $first_pack_size
+        $first_pack_size // same as remaining size initially
     );
     $insert->execute();
     $insert->close();

@@ -27,6 +27,10 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     $costs_arr  = $_POST['costs'];
     $transport  = floatval($_POST['transport_cost']);
     $bought_by  = trim($_POST['items_bought_by']);
+    $petty_cash_no = trim($_POST['petty_cash_no']);
+$approved_by = trim($_POST['approved_by']);
+$payment_status = $_POST['payment_status'];
+
 
     $expense_array = [];
     $total_items = 0;
@@ -39,8 +43,14 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     $total_amount = $total_items + $transport;
     $items_json = json_encode($expense_array);
 
-    $stmt = $conn->prepare("UPDATE lunch_expense SET start_date=?, end_date=?, week_no=?, items=?, total_amount=?, items_bought_by=?, transport_cost=? WHERE lunch_id=?");
-    $stmt->bind_param("ssisdsdi",$start_date,$end_date,$week_no,$items_json,$total_amount,$bought_by,$transport,$lunch_id);
+    $stmt = $conn->prepare("UPDATE lunch_expense 
+    SET start_date=?, end_date=?, week_no=?, items=?, total_amount=?, items_bought_by=?, transport_cost=?, petty_cash_no=?, approved_by=?, payment_status=? 
+    WHERE lunch_id=?");
+
+$stmt->bind_param("ssisdsdsssi", 
+    $start_date, $end_date, $week_no, $items_json, $total_amount, 
+    $bought_by, $transport, $petty_cash_no, $approved_by, $payment_status, $lunch_id);
+
     $stmt->execute();
     $stmt->close();
     $success = "Lunch expense updated successfully!";
@@ -117,6 +127,25 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
             </div>
 
             <div class="text-right font-bold text-lg mt-2">Total Amount: KES <span id="total_amount"><?= number_format($expense['total_amount'],2) ?></span></div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+    <input type="text" name="petty_cash_no" 
+        value="<?= htmlspecialchars($expense['petty_cash_no'] ?? '') ?>" 
+        placeholder="Petty Cash No:" 
+        class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-300">
+
+    <input type="text" name="approved_by" 
+        value="<?= htmlspecialchars($expense['approved_by'] ?? '') ?>" 
+        placeholder="Approved By:" 
+        class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-300">
+
+    <select name="payment_status" 
+        class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-300">
+        <option value="Pending" <?= ($expense['payment_status'] ?? '') == 'Pending' ? 'selected' : '' ?>>Pending Payment</option>
+        <option value="Paid" <?= ($expense['payment_status'] ?? '') == 'Paid' ? 'selected' : '' ?>>Paid</option>
+    </select>
+</div>
+
 
             <button type="submit" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 transition">Update Expense</button>
             <a href="add_lunch_expense.php" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition">Back</a>
