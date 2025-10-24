@@ -1,13 +1,15 @@
 <!-- superadmin/navbar.php -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
 <div class="w-64 h-screen bg-blue-100 fixed left-0 top-0 p-5 overflow-y-auto flex flex-col">
   <!-- Profile Section -->
   <div class="flex items-center mb-6">
     <div class="w-12 h-12 bg-blue-500 text-white flex items-center justify-center rounded-full text-xl font-bold">
-      
+      <i class="fa-solid fa-user-shield"></i>
     </div>
     <div class="ml-3">
       <p class="font-semibold text-blue-800">Super Admin</p>
-      <a href="profile.php" class="text-sm text-blue-600 hover:underline">Edit Profile</a>
+      <a href="profile.php" class="text-sm text-blue-600 hover:underline"><i class="fa-solid fa-pen-to-square mr-1"></i>Edit Profile</a>
     </div>
   </div>
 
@@ -18,7 +20,7 @@
     <div>
       <h3 class="text-blue-700 font-semibold uppercase">Main</h3>
       <ul class="ml-4 space-y-2 text-sm">
-        <li><a href="dashboard.php" class="block hover:bg-blue-200 p-2 rounded">Dashboard</a></li>
+        <li><a href="dashboard.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-chart-line mr-2"></i>Dashboard</a></li>
       </ul>
     </div>
 
@@ -26,18 +28,19 @@
     <div>
       <h3 class="text-blue-700 font-semibold uppercase">HR</h3>
       <ul class="ml-4 space-y-2 text-sm">
-        <li><a href="add_employee.php" class="block hover:bg-blue-200 p-2 rounded">Add Employee</a></li>
-        <li><a href="view_employees.php" class="block hover:bg-blue-200 p-2 rounded">View Employees</a></li>
-        <li><a href="employee_information.php" class="block hover:bg-blue-200 p-2 rounded">Employees Information</a></li>
-        <li><a href="perfomance_evaluation_list.php" class="block hover:bg-blue-200 p-2 rounded">Perfomance Evaluation</a></li>
-        <li><a href="manage_leaves.php" class="block hover:bg-blue-200 p-2 rounded">Manage Leaves</a></li>
-        <li><a href="manage_expenses.php" class="block hover:bg-blue-200 p-2 rounded">Add Expense</a></li>
-        <li><a href="add_lunch_expense.php" class="block hover:bg-blue-200 p-2 rounded">Lunch Expense</a></li>
-        <li><a href="breakfast_expense.php" class="block hover:bg-blue-200 p-2 rounded">Breakfast Expense</a></li>
-        <li><a href="record_training.php" class="block hover:bg-blue-200 p-2 rounded">Record Training</a></li>
-        <li><a href="packaging_request.php" class="block hover:bg-blue-200 p-2 rounded">Packaging Request</a></li>
-        <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded">New Item Request</a></li>
-        <li><a href="hr_report.php" class="block hover:bg-blue-200 p-2 rounded">HR Report</a></li>
+        <li><a href="add_employee.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-user-plus mr-2"></i>Add Employee</a></li>
+        <li><a href="view_employees.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-users mr-2"></i>View Employees</a></li>
+        <li><a href="employee_information.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-id-card mr-2"></i>Employees Information</a></li>
+        <li><a href="create_staff_account.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-calendar-alt mr-2"></i>Create Staff Account</a></li>
+        <li><a href="perfomance_evaluation_list.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-star mr-2"></i>Performance Evaluation</a></li>
+        <li><a href="leaves_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-calendar-check mr-2"></i>Leaves request</a></li>
+        <li><a href="manage_expenses.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-money-bill mr-2"></i>Add Expense</a></li>
+        <li><a href="add_lunch_expense.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-utensils mr-2"></i>Lunch Expense</a></li>
+        <li><a href="breakfast_expense.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-mug-hot mr-2"></i>Breakfast Expense</a></li>
+        <li><a href="record_training.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-chalkboard-user mr-2"></i>Record Training</a></li>
+        <li><a href="packaging_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-box mr-2"></i>Packaging Request</a></li>
+        <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-plus mr-2"></i>New Item Request</a></li>
+        <li><a href="hr_report.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-lines mr-2"></i>HR Report</a></li>
       </ul>
     </div>
 
@@ -45,15 +48,14 @@
     <div>
       <h3 class="text-blue-700 font-semibold uppercase">Production</h3>
       <ul class="ml-4 space-y-2 text-sm">
-        <li><a href="add_product.php" class="block hover:bg-blue-200 p-2 rounded">Add Product</a></li>
-        <li><a href="manage_bom.php" class="block hover:bg-blue-200 p-2 rounded">Manage BOM</a></li>
-        <li><a href="record_production_run.php" class="block hover:bg-blue-200 p-2 rounded">Record Production Run</a></li>
-        <li><a href="packaging_list.php" class="block hover:bg-blue-200 p-2 rounded">Packaging list</a></li>
-        <li><a href="view_finished_products.php" class="block hover:bg-blue-200 p-2 rounded">View Finished Products</a></li>
-        <li><a href="view_inventory.php" class="block hover:bg-blue-200 p-2 rounded">View Inventory</a></li>
-        <li><a href="bill_of_material_history.php" class="block hover:bg-blue-200 p-2 rounded">View Bill Of Material</a></li>
-        <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded">New Item Request</a></li>
-        <li><a href="production_report.php" class="block hover:bg-blue-200 p-2 rounded">Reports</a></li>
+        <li><a href="add_product.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-plus-circle mr-2"></i>Add Product</a></li>
+        <li><a href="manage_bom.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-list-check mr-2"></i>Manage BOM</a></li>
+        <li><a href="record_production_run.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-industry mr-2"></i>Record Production Run</a></li>
+        <li><a href="packaging_list.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-boxes-stacked mr-2"></i>Packaging List</a></li>
+        <li><a href="view_finished_products.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-check-double mr-2"></i>View Finished Products</a></li>
+        <li><a href="bill_of_material_history.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-invoice mr-2"></i>View Bill Of Material</a></li>
+        <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-plus mr-2"></i>New Item Request</a></li>
+        <li><a href="production_report.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-chart-bar mr-2"></i>Reports</a></li>
       </ul>
     </div>
 
@@ -61,13 +63,13 @@
     <div>
       <h3 class="text-blue-700 font-semibold uppercase">Quality Control</h3>
       <ul class="ml-4 space-y-2 text-sm">
-        <li><a href="inspect_raw_materials.php" class="block hover:bg-blue-200 p-2 rounded">Inspect Chemicals In</a></li>
-        <li><a href="inspect_finished_products.php" class="block hover:bg-blue-200 p-2 rounded">Inspect Finished Products</a></li>
-         <li><a href="quality_manager_review.php" class="block hover:bg-blue-200 p-2 rounded">Quality Manager Review</a></li>
-        <li><a href="record_production_run.php" class="block hover:bg-blue-200 p-2 rounded">View Production Runs</a></li>
-        <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded">New Item Request</a></li>
-        <li><a href="disposables.php" class="block hover:bg-blue-200 p-2 rounded">Disposals</a></li>
-        <li><a href="qc_reports.php" class="block hover:bg-blue-200 p-2 rounded">QC Reports</a></li>
+        <li><a href="inspect_raw_materials.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-vial mr-2"></i>Inspect Chemicals In</a></li>
+        <li><a href="inspect_finished_products.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-clipboard-check mr-2"></i>Inspect Finished Products</a></li>
+        <li><a href="quality_manager_review.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-user-tie mr-2"></i>Quality Manager Review</a></li>
+        <li><a href="record_production_run.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-cogs mr-2"></i>View Production Runs</a></li>
+        <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-plus mr-2"></i>New Item Request</a></li>
+        <li><a href="disposables.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-trash-can mr-2"></i>Disposals</a></li>
+        <li><a href="qc_reports.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-contract mr-2"></i>QC Reports</a></li>
       </ul>
     </div>
 
@@ -75,25 +77,25 @@
     <div>
       <h3 class="text-blue-700 font-semibold uppercase">Stores</h3>
       <ul class="ml-4 space-y-2 text-sm">
-        <li><a href="add_material.php" class="block hover:bg-blue-200 p-2 rounded">Add Raw Material</a></li>
-        <li><a href="remove_material.php" class="block hover:bg-blue-200 p-2 rounded">Remove Raw Material</a></li>
-        <li><a href="chemicals_in.php" class="block hover:bg-blue-200 p-2 rounded">Chemicals In</a></li>
-        <li><a href="chemical_list.php" class="block hover:bg-blue-200 p-2 rounded">Items list</a></li>
-        <li><a href="chemical_inventory.php" class="block hover:bg-blue-200 p-2 rounded">Chemicals Inventory</a></li>
-        <li><a href="products_inventory.php" class="block hover:bg-blue-200 p-2 rounded">Finished product Inventory</a></li>
-        <li><a href="engineering_products.php" class="block hover:bg-blue-200 p-2 rounded">Engineer products Inventory</a></li>
-        <li><a href="stock_in.php" class="block hover:bg-blue-200 p-2 rounded">Stock In</a></li>
-        <li><a href="qc_approval.php" class="block hover:bg-blue-200 p-2 rounded">QC Approval</a></li>
-        <li><a href="stock_out.php" class="block hover:bg-blue-200 p-2 rounded">Stock Out</a></li>
-        <li><a href="production_requests.php" class="block hover:bg-blue-200 p-2 rounded">Production Requests</a></li>
-        <li><a href="view_inventory.php" class="block hover:bg-blue-200 p-2 rounded">View Inventory</a></li>
-        <li><a href="bill_of_material_history.php" class="block hover:bg-blue-200 p-2 rounded">View Bill Of Material</a></li>
-         <li><a href="order_deliveries.php" class="block hover:bg-blue-200 p-2 rounded">Create Delivery</a></li>
-         <li><a href="create_order_delivery.php" class="block hover:bg-blue-200 p-2 rounded">Create order</a></li>
-         <li><a href="all_delivery_order_items.php" class="block hover:bg-blue-200 p-2 rounded">View all orders list</a></li>
-         <li><a href="delivery_details.php" class="block hover:bg-blue-200 p-2 rounded">Delivery details</a></li>
-        <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded">New Item Request</a></li>
-        <li><a href="store_reports.php" class="block hover:bg-blue-200 p-2 rounded">Reports</a></li>
+        <li><a href="add_material.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-box-open mr-2"></i>Add Raw Material</a></li>
+        <li><a href="remove_material.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-minus-circle mr-2"></i>Remove Raw Material</a></li>
+        <li><a href="chemicals_in.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-flask mr-2"></i>Chemicals In</a></li>
+        <li><a href="chemical_list.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-list mr-2"></i>Items List</a></li>
+        <li><a href="chemical_inventory.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-vials mr-2"></i>Chemicals Inventory</a></li>
+        <li><a href="products_inventory.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-boxes mr-2"></i>Finished Product Inventory</a></li>
+        <li><a href="engineering_products.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-gear mr-2"></i>Engineer Products Inventory</a></li>
+        <li><a href="stock_in.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-arrow-down mr-2"></i>Stock In</a></li>
+        <li><a href="qc_approval.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-thumbs-up mr-2"></i>QC Approval</a></li>
+        <li><a href="stock_out.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-arrow-up mr-2"></i>Stock Out</a></li>
+        <li><a href="production_requests.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-list-ul mr-2"></i>Production Requests</a></li>
+        <li><a href="view_inventory.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-warehouse mr-2"></i>View Inventory</a></li>
+        <li><a href="bill_of_material_history.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-scroll mr-2"></i>View Bill Of Material</a></li>
+        <li><a href="order_deliveries.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-truck mr-2"></i>Create Delivery</a></li>
+        <li><a href="create_order_delivery.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-pen mr-2"></i>Create Order</a></li>
+        <li><a href="all_delivery_order_items.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-clipboard-list mr-2"></i>View All Orders List</a></li>
+        <li><a href="delivery_details.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-info-circle mr-2"></i>Delivery Details</a></li>
+        <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-plus mr-2"></i>New Item Request</a></li>
+        <li><a href="store_reports.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-chart-pie mr-2"></i>Reports</a></li>
       </ul>
     </div>
 
@@ -101,41 +103,28 @@
     <div>
       <h3 class="text-blue-700 font-semibold uppercase">Procurement</h3>
       <ul class="ml-4 space-y-2 text-sm">
-        <li><a href="add_procurement_product.php" class="block hover:bg-blue-200 p-2 rounded">Add Product</a></li>
-        <li><a href="supplier_list.php" class="block hover:bg-blue-200 p-2 rounded">Supplier List</a></li>
-        <li><a href="purchase_order.php" class="block hover:bg-blue-200 p-2 rounded">New Purchase</a></li>
-        <li><a href="approved_purchases.php" class="block hover:bg-blue-200 p-2 rounded">Purchase List</a></li>
-       <li><a href="department_requests.php" class="block hover:bg-blue-200 p-2 rounded">Department Requests</a></li>
-        <li><a href="delivered_purchases.php" class="block hover:bg-blue-200 p-2 rounded">Delivery Of Purchases</a></li>
-        <li><a href="procurement_reports.php" class="block hover:bg-blue-200 p-2 rounded">Procurement reports</a></li>
+        <li><a href="add_procurement_product.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-cart-plus mr-2"></i>Add Product</a></li>
+        <li><a href="supplier_list.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-truck-field mr-2"></i>Supplier List</a></li>
+        <li><a href="purchase_order.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-signature mr-2"></i>New Purchase</a></li>
+        <li><a href="approved_purchases.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-list-check mr-2"></i>Purchase List</a></li>
+        <li><a href="department_requests.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-clipboard-list mr-2"></i>Department Requests</a></li>
+        <li><a href="delivered_purchases.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-truck-ramp-box mr-2"></i>Delivery Of Purchases</a></li>
+        <li><a href="procurement_reports.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-chart-line mr-2"></i>Procurement Reports</a></li>
       </ul>
     </div>
-
-    <!-- Sales -->
-    <!--
-    <div>
-      <h3 class="text-blue-700 font-semibold uppercase">Sales</h3>
-      <ul class="ml-4 space-y-2 text-sm">
-      <li><a href="create_invoice.php" class="block hover:bg-blue-200 p-2 rounded">Create New Invoice</a></li>
-      <li><a href="sales_products.php" class="block hover:bg-blue-200 p-2 rounded">Add Products & Prices</a></li>
-      <li><a href="view_sales.php" class="block hover:bg-blue-200 p-2 rounded">View Sales</a></li>
-      <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded">New Item Request</a></li>
-      </ul>
-    </div
-    -->
 
     <!-- Drivers -->
     <div>
       <h3 class="text-blue-700 font-semibold uppercase">Drivers</h3>
       <ul class="ml-4 space-y-2 text-sm">
-        <li><a href="add_vehicle.php" class="block hover:bg-blue-200 p-2 rounded">Manage vehicles</a></li>
-         <li><a href="pending_deliveries.php" class="block hover:bg-blue-200 p-2 rounded">Pending Deliveries</a></li>
-        <li><a href="delivered_orders.php" class="block hover:bg-blue-200 p-2 rounded">Delivered</a></li>
-        <li><a href="manage_trips.php" class="block hover:bg-blue-200 p-2 rounded">Manage Trips</a></li>
-        <li><a href="vehicle_maintenance.php" class="block hover:bg-blue-200 p-2 rounded">Vehicle Maintenance Costs</a></li>
-        <li><a href="fuel.php" class="block hover:bg-blue-200 p-2 rounded">Fuel Section</a></li>
-        <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded">New Item Request</a></li>
-        <li><a href="vehicle_reports.php" class="block hover:bg-blue-200 p-2 rounded">Vehicles Report</a></li>
+        <li><a href="add_vehicle.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-car mr-2"></i>Manage Vehicles</a></li>
+        <li><a href="pending_deliveries.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-clock mr-2"></i>Pending Deliveries</a></li>
+        <li><a href="delivered_orders.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-check-circle mr-2"></i>Delivered</a></li>
+        <li><a href="manage_trips.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-route mr-2"></i>Manage Trips</a></li>
+        <li><a href="vehicle_maintenance.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-wrench mr-2"></i>Vehicle Maintenance Costs</a></li>
+        <li><a href="fuel.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-gas-pump mr-2"></i>Fuel Section</a></li>
+        <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-plus mr-2"></i>New Item Request</a></li>
+        <li><a href="vehicle_reports.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-chart-area mr-2"></i>Vehicles Report</a></li>
       </ul>
     </div>
 
@@ -143,16 +132,16 @@
     <div>
       <h3 class="text-blue-700 font-semibold uppercase">Reports</h3>
       <ul class="ml-4 space-y-2 text-sm">
-        <li><a href="all_reports.php" class="block hover:bg-blue-200 p-2 rounded">Generate Reports</a></li>
+        <li><a href="all_reports.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-alt mr-2"></i>Generate Reports</a></li>
       </ul>
     </div>
 
   </nav>
 
-  <!-- Logout Button at the Bottom -->
+  <!-- Logout Button -->
   <div class="mt-auto">
     <a href="logout.php" class="block bg-red-500 hover:bg-red-600 text-white text-center py-2 rounded">
-      Logout
+      <i class="fa-solid fa-right-from-bracket mr-2"></i>Logout
     </a>
   </div>
 </div>

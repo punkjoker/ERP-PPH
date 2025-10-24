@@ -1,3 +1,4 @@
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <!-- HR Department Navbar -->
 <div class="w-64 h-screen bg-blue-100 fixed left-0 top-0 p-5 overflow-y-auto flex flex-col">
   <!-- Profile Section -->
@@ -16,18 +17,19 @@
     <div>
       <h3 class="text-blue-700 font-semibold uppercase">HR</h3>
      <ul class="ml-4 space-y-2 text-sm">
-        <li><a href="add_employee.php" class="block hover:bg-blue-200 p-2 rounded">Add Employee</a></li>
-        <li><a href="view_employees.php" class="block hover:bg-blue-200 p-2 rounded">View Employees</a></li>
-        <li><a href="employee_information.php" class="block hover:bg-blue-200 p-2 rounded">Employees Information</a></li>
-        <li><a href="perfomance_evaluation_list.php" class="block hover:bg-blue-200 p-2 rounded">Perfomance Evaluation</a></li>
-        <li><a href="manage_leaves.php" class="block hover:bg-blue-200 p-2 rounded">Manage Leaves</a></li>
-        <li><a href="manage_expenses.php" class="block hover:bg-blue-200 p-2 rounded">Add Expense</a></li>
-        <li><a href="add_lunch_expense.php" class="block hover:bg-blue-200 p-2 rounded">Lunch Expense</a></li>
-        <li><a href="breakfast_expense.php" class="block hover:bg-blue-200 p-2 rounded">Breakfast Expense</a></li>
-        <li><a href="record_training.php" class="block hover:bg-blue-200 p-2 rounded">Record Training</a></li>
-        <li><a href="packaging_request.php" class="block hover:bg-blue-200 p-2 rounded">Packaging Request</a></li>
-        <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded">New Item Request</a></li>
-        <li><a href="hr_report.php" class="block hover:bg-blue-200 p-2 rounded">HR Report</a></li>
+        <li><a href="add_employee.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-user-plus mr-2"></i>Add Employee</a></li>
+        <li><a href="view_employees.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-users mr-2"></i>View Employees</a></li>
+        <li><a href="employee_information.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-id-card mr-2"></i>Employees Information</a></li>
+        <li><a href="create_staff_account.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-calendar-alt mr-2"></i>Create Staff Account</a></li>
+        <li><a href="perfomance_evaluation_list.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-star mr-2"></i>Performance Evaluation</a></li>
+        <li><a href="leaves_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-calendar-check mr-2"></i>Leaves request</a></li>
+        <li><a href="manage_expenses.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-money-bill mr-2"></i>Add Expense</a></li>
+        <li><a href="add_lunch_expense.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-utensils mr-2"></i>Lunch Expense</a></li>
+        <li><a href="breakfast_expense.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-mug-hot mr-2"></i>Breakfast Expense</a></li>
+        <li><a href="record_training.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-chalkboard-user mr-2"></i>Record Training</a></li>
+        <li><a href="packaging_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-box mr-2"></i>Packaging Request</a></li>
+        <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-plus mr-2"></i>New Item Request</a></li>
+        <li><a href="hr_report.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-lines mr-2"></i>HR Report</a></li>
       </ul>
     </div>
   </nav>

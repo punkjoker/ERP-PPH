@@ -4,6 +4,7 @@ include 'db_con.php';
 $employee_id = intval($_GET['id'] ?? 0);
 $year = intval($_GET['year'] ?? date('Y'));
 
+
 // ✅ Fetch employee
 $stmt = $conn->prepare("SELECT * FROM employees WHERE employee_id = ?");
 $stmt->bind_param("i", $employee_id);

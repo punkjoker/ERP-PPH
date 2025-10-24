@@ -25,12 +25,18 @@ if(isset($_GET['download_pdf'])){
     $pdf->Cell(0,10,"Lunch Expense Report",0,1,'C');
     $pdf->SetFont("Arial","",12);
     $pdf->Ln(5);
+
+    // Header details
     $pdf->Cell(0,8,"Week No: ".$expense['week_no'],0,1);
     $pdf->Cell(0,8,"From: ".$expense['start_date']." To: ".$expense['end_date'],0,1);
     $pdf->Cell(0,8,"Items Bought By: ".$expense['items_bought_by'],0,1);
+    $pdf->Cell(0,8,"Petty Cash No: ".($expense['petty_cash_no'] ?: 'N/A'),0,1);
+    $pdf->Cell(0,8,"Approved By: ".($expense['approved_by'] ?: 'N/A'),0,1);
+    $pdf->Cell(0,8,"Payment Status: ".($expense['payment_status'] ?: 'Pending'),0,1);
     $pdf->Cell(0,8,"Transport Cost: KES ".number_format($expense['transport_cost'],2),0,1);
     $pdf->Ln(5);
 
+    // Items table
     $pdf->SetFont("Arial","B",12);
     $pdf->Cell(10,8,"#",1);
     $pdf->Cell(100,8,"Item",1);
@@ -68,14 +74,20 @@ if(isset($_GET['download_pdf'])){
     <h1 class="text-3xl font-bold mb-6 text-blue-700">View Lunch Expense</h1>
 
     <div class="bg-white shadow rounded-lg p-6 mb-4">
-        <div class="flex justify-between items-center mb-4">
+        <div class="flex justify-between items-start mb-4">
             <div>
                 <span class="font-semibold">Week No:</span> <?= $expense['week_no'] ?><br>
                 <span class="font-semibold">From:</span> <?= $expense['start_date'] ?> 
                 <span class="font-semibold">To:</span> <?= $expense['end_date'] ?><br>
-                <span class="font-semibold">Items Bought By:</span> <?= htmlspecialchars($expense['items_bought_by']) ?>
+                <span class="font-semibold">Items Bought By:</span> <?= htmlspecialchars($expense['items_bought_by']) ?><br>
+                <span class="font-semibold">Petty Cash No:</span> <?= htmlspecialchars($expense['petty_cash_no'] ?: 'N/A') ?><br>
+                <span class="font-semibold">Approved By:</span> <?= htmlspecialchars($expense['approved_by'] ?: 'N/A') ?><br>
+                <span class="font-semibold">Payment Status:</span> 
+                <span class="<?= $expense['payment_status'] == 'Paid' ? 'text-green-600 font-semibold' : 'text-yellow-600 font-semibold' ?>">
+                    <?= htmlspecialchars($expense['payment_status'] ?: 'Pending') ?>
+                </span>
             </div>
-            <div>
+            <div class="text-right">
                 <span class="font-semibold">Transport Cost:</span> KES <?= number_format($expense['transport_cost'],2) ?><br>
                 <span class="font-bold text-lg">Total Amount:</span> KES <?= number_format($expense['total_amount'],2) ?>
             </div>

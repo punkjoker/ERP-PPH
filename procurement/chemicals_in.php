@@ -59,71 +59,79 @@ $chemicals = $conn->query($query);
   <h2 class="text-2xl font-bold text-blue-700 mb-6 text-center">Chemicals In</h2>
 
   <!-- ✅ Add Chemical Form -->
-  <form method="POST" id="chemForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+<form method="POST" id="chemForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
 
-    <div>
-      <label class="block text-sm font-medium text-gray-700">Chemical Name</label>
-      <select name="chemical_name" id="chemical_name" class="w-full border rounded px-3 py-2" required>
-        <option value="">-- Select Chemical --</option>
-        <?php while($chem = $chemNames->fetch_assoc()): ?>
-          <option value="<?= htmlspecialchars($chem['chemical_name']) ?>" data-code="<?= htmlspecialchars($chem['chemical_code']) ?>">
-            <?= htmlspecialchars($chem['chemical_name']) ?>
-          </option>
-        <?php endwhile; ?>
-      </select>
-    </div>
+  <!-- ✅ Chemical Name (typable + searchable) -->
+  <div>
+    <label class="block text-sm font-medium text-gray-700">Chemical Name</label>
+    <input list="chemical_list" name="chemical_name" id="chemical_name"
+           class="w-full border rounded px-3 py-2"
+           placeholder="Type or select chemical" required>
+    <datalist id="chemical_list">
+      <?php while ($chem = $chemNames->fetch_assoc()): ?>
+        <option value="<?= htmlspecialchars($chem['chemical_name']) ?>" data-code="<?= htmlspecialchars($chem['chemical_code']) ?>"></option>
+      <?php endwhile; ?>
+    </datalist>
+  </div>
 
-    <div>
-      <label class="block text-sm font-medium text-gray-700">Chemical Code</label>
-      <input type="text" name="chemical_code" id="chemical_code" class="w-full border rounded px-3 py-2 bg-gray-100" readonly>
-    </div>
+  <!-- ✅ Chemical Code (auto-filled when chemical selected) -->
+  <div>
+    <label class="block text-sm font-medium text-gray-700">Chemical Code</label>
+    <input type="text" name="chemical_code" id="chemical_code"
+           class="w-full border rounded px-3 py-2 bg-gray-100" readonly>
+  </div>
 
-    <div>
-      <label class="block text-sm font-medium text-gray-700">PO Number (Approved)</label>
-      <select name="po_number" id="po_number" class="w-full border rounded px-3 py-2">
-        <option value="">-- Select PO --</option>
-        <?php while($po = $poQuery->fetch_assoc()): ?>
-          <option value="<?= $po['po_no'] ?>"><?= $po['po_no'] ?></option>
-        <?php endwhile; ?>
-      </select>
-    </div>
+  <!-- ✅ PO Number (typable + searchable) -->
+  <div>
+    <label class="block text-sm font-medium text-gray-700">PO Number (Approved)</label>
+    <input list="po_list" name="po_number" id="po_number"
+           class="w-full border rounded px-3 py-2"
+           placeholder="Type or select PO number">
+    <datalist id="po_list">
+      <?php while ($po = $poQuery->fetch_assoc()): ?>
+        <option value="<?= htmlspecialchars($po['po_no']) ?>"></option>
+      <?php endwhile; ?>
+    </datalist>
+  </div>
 
-    <div>
-      <label class="block text-sm font-medium text-gray-700">Batch No</label>
-      <input type="text" name="batch_no" class="w-full border rounded px-3 py-2" required>
-    </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700">Batch No</label>
+    <input type="text" name="batch_no" class="w-full border rounded px-3 py-2" required>
+  </div>
 
-    <div>
-      <label class="block text-sm font-medium text-gray-700">RM LOT NO</label>
-      <input type="text" name="rm_lot_no" class="w-full border rounded px-3 py-2" required>
-    </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700">RM LOT NO</label>
+    <input type="text" name="rm_lot_no" class="w-full border rounded px-3 py-2" required>
+  </div>
 
-    <div>
-      <label class="block text-sm font-medium text-gray-700">STD Quantity</label>
-      <input type="number" step="0.01" name="std_quantity" id="std_quantity" class="w-full border rounded px-3 py-2" required>
-    </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700">STD Quantity</label>
+    <input type="number" step="0.01" name="std_quantity" id="std_quantity" class="w-full border rounded px-3 py-2" required>
+  </div>
 
-    <div>
-      <label class="block text-sm font-medium text-gray-700">Unit Price (Auto)</label>
-      <input type="number" step="0.01" name="unit_price" id="unit_price" class="w-full border rounded px-3 py-2 bg-gray-100" readonly>
-    </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700">Unit Price (Auto)</label>
+    <input type="number" step="0.01" name="unit_price" id="unit_price" class="w-full border rounded px-3 py-2 bg-gray-100" readonly>
+  </div>
 
-    <div>
-      <label class="block text-sm font-medium text-gray-700">Total Cost</label>
-      <input type="number" step="0.01" name="total_cost" id="total_cost" class="w-full border rounded px-3 py-2 bg-gray-100" readonly>
-    </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700">Total Cost</label>
+    <input type="number" step="0.01" name="total_cost" id="total_cost" class="w-full border rounded px-3 py-2 bg-gray-100" readonly>
+  </div>
 
-    <div>
-      <label class="block text-sm font-medium text-gray-700">Date Added</label>
-      <input type="date" name="date_added" class="w-full border rounded px-3 py-2" required>
-    </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700">Date Added</label>
+    <input type="date" name="date_added" class="w-full border rounded px-3 py-2" required>
+  </div>
 
-    <div class="md:col-span-2 flex justify-center mt-4">
-      <button type="submit" name="add_chemical" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg">
-        Add Chemical
-      </button>
-    </div>
-  </form>
+  <div class="md:col-span-2 flex justify-center mt-4">
+    <button type="submit" name="add_chemical"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg">
+      Add Chemical
+    </button>
+  </div>
+</form>
+
 
   <!-- ✅ Filter Section -->
   <form method="GET" class="flex flex-wrap gap-4 mb-4 items-end">
@@ -191,11 +199,19 @@ $chemicals = $conn->query($query);
 </div>
 
 <script>
-// ✅ Auto-fill Chemical Code
-$('#chemical_name').on('change', function() {
-  const code = $(this).find(':selected').data('code');
+// ✅ Auto-fill Chemical Code when a name is typed/selected
+$('#chemical_name').on('input', function() {
+  const inputVal = $(this).val().toLowerCase();
+  let code = '';
+  $('#chemical_list option').each(function() {
+    if ($(this).val().toLowerCase() === inputVal) {
+      code = $(this).data('code');
+      return false;
+    }
+  });
   $('#chemical_code').val(code || '');
 });
+
 
 // ✅ Auto-fill Unit Price & Quantity from PO (AJAX)
 $('#po_number').on('change', function() {

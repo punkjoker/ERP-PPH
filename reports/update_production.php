@@ -6,7 +6,7 @@ $production = null;
 
 // ✅ Step 1: Ensure production_run row exists
 $bom_query = "
-    SELECT p.name AS product_name, bom.requested_by, bom.description
+    SELECT p.name AS product_name, bom.requested_by, bom.description,  bom.batch_number
     FROM bill_of_materials bom
     JOIN products p ON bom.product_id = p.id
     WHERE bom.id = $bom_id
@@ -17,6 +17,7 @@ if ($bom_result && $bom_result->num_rows > 0) {
     $product_name = $conn->real_escape_string($bom_data['product_name']);
     $requested_by = $conn->real_escape_string($bom_data['requested_by']);
     $description = $conn->real_escape_string($bom_data['description']);
+    $batch_number = $bom_data['batch_number'] ?? 'N/A';
 
     $conn->query("
         INSERT IGNORE INTO production_runs (request_id, product_name, requested_by, description, status)
@@ -113,14 +114,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_production']))
 
     <div class="flex-1 p-8 ml-64">
         <!-- Header -->
-        <div class="bg-white shadow-md rounded-lg p-6 mb-6 flex items-center border-b-4 border-blue-600">
-            <img src="images/lynn_logo.png" alt="Logo" class="h-16 mr-6">
-            <div>
-                <h1 class="text-2xl font-bold text-gray-800">BATCH MANUFACTURING (QF-27)</h1>
-                <p class="text-sm text-gray-600">PRODUCT NAME: 
-                    <span class="font-semibold"><?= htmlspecialchars($production['product_name']) ?></span></p>
-            </div>
-        </div>
+       <div class="bg-white shadow-md rounded-lg p-6 mb-6 flex items-center border-b-4 border-blue-600">
+    <img src="images/lynn_logo.png" alt="Logo" class="h-16 mr-6">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-800">BATCH MANUFACTURING (QF-27)</h1>
+        <p class="text-sm text-gray-600">
+            PRODUCT NAME:
+            <span class="font-semibold"><?= htmlspecialchars($production['product_name']) ?></span>
+        </p>
+        <p class="text-sm text-gray-600 mt-1">
+    BATCH NUMBER:
+    <span class="font-semibold text-blue-700">
+        <?= htmlspecialchars($bom_data['batch_number'] ?? 'N/A') ?>
+    </span>
+</p>
+<p class="text-sm text-gray-600 mt-1">
+    REQUESTED BY:
+    <span class="font-semibold text-blue-700">
+        <?= htmlspecialchars($bom_data['requested_by'] ?? 'N/A') ?>
+    </span>
+</p>
+<p class="text-sm text-gray-600 mt-1">
+    DESCRIPTION:
+    <span class="font-semibold text-blue-700">
+        <?= htmlspecialchars($bom_data['description'] ?? 'N/A') ?>
+    </span>
+</p>
+
+    </div>
+</div>
+
 
         <!-- Production Form -->
         <form method="POST" class="space-y-8 bg-white shadow-lg p-8 rounded-lg border">

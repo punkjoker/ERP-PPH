@@ -89,6 +89,8 @@ $data_out = $stmt_out->get_result()->fetch_assoc();
 
 // Materials chart (optional)
 $materials = $conn->query("SELECT material_name, quantity, cost FROM materials");
+
+
 ?>
 
 <!DOCTYPE html>
@@ -153,7 +155,292 @@ $materials = $conn->query("SELECT material_name, quantity, cost FROM materials")
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
     <div class="h-64"><canvas id="quantityChart"></canvas></div>
     <div class="h-64"><canvas id="amountChart"></canvas></div>
+   
   </div>
+ <?php
+// --- STOCK IN BY NAME CHART ---
+$stockChartData = $conn->prepare("
+    SELECT stock_name, SUM(original_quantity) AS total_quantity
+    FROM stock_in
+    WHERE $where_in" . 
+    ($product ? " AND stock_code=?" : "") . 
+    ($product_name ? " AND stock_name=?" : "") . "
+    GROUP BY stock_name
+    ORDER BY stock_name ASC
+");
+
+$params_stock = $params_in;
+$types_stock = $types_in;
+
+$stockChartData->bind_param($types_stock, ...$params_stock);
+$stockChartData->execute();
+$resultStockChart = $stockChartData->get_result();
+
+$stockNames = [];
+$stockQuantities = [];
+while($row = $resultStockChart->fetch_assoc()){
+    $stockNames[] = $row['stock_name'];
+    $stockQuantities[] = (int)$row['total_quantity'];
+}
+?>
+
+<!-- Stock In By Name Chart (Full Page Width) -->
+<div class="mt-8 w-full bg-gray-50 rounded-lg shadow p-4">
+  <h3 class="text-lg font-bold mb-4 text-center text-blue-700">Stock In Quantities (By Product)</h3>
+  <div class="h-96 w-full">
+    <canvas id="stockInByNameChart"></canvas>
+  </div>
+</div>
+
+<script>
+const ctxStock = document.getElementById('stockInByNameChart').getContext('2d');
+new Chart(ctxStock, {
+    type: 'bar',
+    data: {
+        labels: <?php echo json_encode($stockNames); ?>,
+        datasets: [{
+            label: 'Original Quantity',
+            data: <?php echo json_encode($stockQuantities); ?>,
+            backgroundColor: '#3b82f6'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false, // Important to fill parent height
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { 
+                title: { display: true, text: 'Stock Name' },
+                ticks: { autoSkip: false, maxRotation: 90, minRotation: 45 }
+            },
+            y: { beginAtZero: true, title: { display: true, text: 'Quantity' } }
+        }
+    }
+});
+</script>
+<?php
+// --- STOCK OUT BY NAME CHART ---
+$stockOutChartData = $conn->prepare("
+    SELECT stock_name, SUM(quantity_removed) AS total_removed
+    FROM stock_out_history
+    WHERE $where_out" . 
+    ($product ? " AND stock_code=?" : "") . 
+    ($product_name ? " AND stock_name=?" : "") . "
+    GROUP BY stock_name
+    ORDER BY stock_name ASC
+");
+
+$params_stock_out = $params_out;
+$types_stock_out = $types_out;
+
+$stockOutChartData->bind_param($types_stock_out, ...$params_stock_out);
+$stockOutChartData->execute();
+$resultStockOutChart = $stockOutChartData->get_result();
+
+$stockOutNames = [];
+$stockOutQuantities = [];
+while($row = $resultStockOutChart->fetch_assoc()){
+    $stockOutNames[] = $row['stock_name'];
+    $stockOutQuantities[] = (float)$row['total_removed'];
+}
+?>
+
+<!-- Stock Out By Name Chart (Full Page Width) -->
+<div class="mt-8 w-full bg-gray-50 rounded-lg shadow p-4">
+  <h3 class="text-lg font-bold mb-4 text-center text-red-700">Stock Out Quantities (By Product)</h3>
+  <div class="h-96 w-full">
+    <canvas id="stockOutByNameChart"></canvas>
+  </div>
+</div>
+
+<script>
+const ctxStockOut = document.getElementById('stockOutByNameChart').getContext('2d');
+new Chart(ctxStockOut, {
+    type: 'bar',
+    data: {
+        labels: <?php echo json_encode($stockOutNames); ?>,
+        datasets: [{
+            label: 'Quantity Removed',
+            data: <?php echo json_encode($stockOutQuantities); ?>,
+            backgroundColor: '#f87171'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false, // fill parent height
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { 
+                title: { display: true, text: 'Stock Name' },
+                ticks: { autoSkip: false, maxRotation: 90, minRotation: 45 }
+            },
+            y: { beginAtZero: true, title: { display: true, text: 'Quantity Removed' } }
+        }
+    }
+});
+</script>
+<?php
+// --- MATERIALS OUT BY NAME CHART ---
+$materialsOutChartData = $conn->prepare("
+    SELECT material_name, SUM(quantity_removed) AS total_removed
+    FROM material_out_history
+    GROUP BY material_name
+    ORDER BY material_name ASC
+");
+
+$materialsOutChartData->execute();
+$resultMaterialsOutChart = $materialsOutChartData->get_result();
+
+$materialNames = [];
+$materialQuantities = [];
+while($row = $resultMaterialsOutChart->fetch_assoc()){
+    $materialNames[] = $row['material_name'];
+    $materialQuantities[] = (int)$row['total_removed'];
+}
+?>
+
+<!-- Materials Out By Name Chart (Full Page Width) -->
+<div class="mt-8 w-full bg-gray-50 rounded-lg shadow p-4">
+  <h3 class="text-lg font-bold mb-4 text-center text-purple-700">Materials Removed (By Material)</h3>
+  <div class="h-96 w-full">
+    <canvas id="materialsOutByNameChart"></canvas>
+  </div>
+</div>
+
+<script>
+const ctxMaterialsOut = document.getElementById('materialsOutByNameChart').getContext('2d');
+new Chart(ctxMaterialsOut, {
+    type: 'bar',
+    data: {
+        labels: <?php echo json_encode($materialNames); ?>,
+        datasets: [{
+            label: 'Quantity Removed',
+            data: <?php echo json_encode($materialQuantities); ?>,
+            backgroundColor: '#8b5cf6'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false, // fill parent height
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { 
+                title: { display: true, text: 'Material Name' },
+                ticks: { autoSkip: false, maxRotation: 90, minRotation: 45 }
+            },
+            y: { beginAtZero: true, title: { display: true, text: 'Quantity Removed' } }
+        }
+    }
+});
+</script>
+<?php
+// --- CHEMICALS BY STANDARD QUANTITY CHART ---
+$chemicalsChartData = $conn->prepare("
+    SELECT chemical_name, SUM(std_quantity) AS total_std_quantity
+    FROM chemicals_in
+    GROUP BY chemical_name
+    ORDER BY chemical_name ASC
+");
+
+$chemicalsChartData->execute();
+$resultChemicalsChart = $chemicalsChartData->get_result();
+
+$chemicalNames = [];
+$chemicalQuantities = [];
+while($row = $resultChemicalsChart->fetch_assoc()){
+    $chemicalNames[] = $row['chemical_name'];
+    $chemicalQuantities[] = (float)$row['total_std_quantity'];
+}
+?>
+
+<!-- Chemicals By Standard Quantity Chart (Full Page Width) -->
+<div class="mt-8 w-full bg-gray-50 rounded-lg shadow p-4">
+  <h3 class="text-lg font-bold mb-4 text-center text-green-700">Chemicals In Quantities (By Chemical)</h3>
+  <div class="h-96 w-full">
+    <canvas id="chemicalsByStdQtyChart"></canvas>
+  </div>
+</div>
+
+<script>
+const ctxChemicals = document.getElementById('chemicalsByStdQtyChart').getContext('2d');
+new Chart(ctxChemicals, {
+    type: 'bar',
+    data: {
+        labels: <?php echo json_encode($chemicalNames); ?>,
+        datasets: [{
+            label: 'Standard Quantity',
+            data: <?php echo json_encode($chemicalQuantities); ?>,
+            backgroundColor: '#10b981' // green color for chemicals
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false, // fill parent height
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { 
+                title: { display: true, text: 'Chemical Name' },
+                ticks: { autoSkip: false, maxRotation: 90, minRotation: 45 }
+            },
+            y: { beginAtZero: true, title: { display: true, text: 'Quantity (kg/L)' } }
+        }
+    }
+});
+</script>
+<?php
+// --- CHEMICALS OUT BY REQUESTED QUANTITY CHART (using chemical_name only) ---
+$chemicalsOutChartData = $conn->prepare("
+    SELECT chemical_name, SUM(quantity_requested) AS total_requested
+    FROM bill_of_material_items
+    GROUP BY chemical_name
+    ORDER BY chemical_name ASC
+");
+
+$chemicalsOutChartData->execute();
+$resultChemicalsOutChart = $chemicalsOutChartData->get_result();
+
+$chemOutNames = [];
+$chemOutQuantities = [];
+while($row = $resultChemicalsOutChart->fetch_assoc()){
+    $chemOutNames[] = $row['chemical_name'];
+    $chemOutQuantities[] = (float)$row['total_requested'];
+}
+?>
+
+<!-- Chemicals Out By Quantity Chart (Full Page Width) -->
+<div class="mt-8 w-full bg-gray-50 rounded-lg shadow p-4">
+  <h3 class="text-lg font-bold mb-4 text-center text-red-700">Chemicals Out Quantities (Production)</h3>
+  <div class="h-96 w-full">
+    <canvas id="chemicalsOutChart"></canvas>
+  </div>
+</div>
+
+<script>
+const ctxChemOut = document.getElementById('chemicalsOutChart').getContext('2d');
+new Chart(ctxChemOut, {
+    type: 'bar',
+    data: {
+        labels: <?php echo json_encode($chemOutNames); ?>,
+        datasets: [{
+            label: 'Quantity Requested',
+            data: <?php echo json_encode($chemOutQuantities); ?>,
+            backgroundColor: '#ef4444' // red for chemicals out
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false, // fill parent height
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { 
+                title: { display: true, text: 'Chemical Name' },
+                ticks: { autoSkip: false, maxRotation: 90, minRotation: 45 }
+            },
+            y: { beginAtZero: true, title: { display: true, text: 'Quantity Requested (kg/L)' } }
+        }
+    }
+});
+</script>
 
   <?php if ($materials && $materials->num_rows > 0): ?>
   <div class="mt-6">

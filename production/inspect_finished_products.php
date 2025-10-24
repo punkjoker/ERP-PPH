@@ -11,7 +11,8 @@ SELECT
     bom.id, 
     bom.bom_date, 
     bom.requested_by, 
-    bom.description, 
+    bom.description,
+    bom.batch_number,
     p.name AS product_name,
     pr.status AS production_status,
     COALESCE(
@@ -37,6 +38,7 @@ GROUP BY
     bom.bom_date, 
     bom.requested_by, 
     bom.description, 
+    bom.batch_number,
     p.name, 
     pr.status
 ORDER BY bom.bom_date DESC
@@ -87,6 +89,7 @@ if (!$result) {
             <tr class="bg-gray-100 text-gray-700 uppercase text-xs">
               <th class="py-2 px-3 border">Date</th>
               <th class="py-2 px-3 border">Product Name</th>
+              <th class="py-2 px-3 border">Batch Number</th>
               <th class="py-2 px-3 border">Requested By</th>
               <th class="py-2 px-3 border">Description</th>
               <th class="py-2 px-3 border">QC Status</th>
@@ -107,6 +110,7 @@ if ($qc_status === 'Approved Product') {
               <tr class="hover:bg-gray-50 transition">
                 <td class="py-2 px-3 border"><?php echo htmlspecialchars($row['bom_date']); ?></td>
                 <td class="py-2 px-3 border"><?php echo htmlspecialchars($row['product_name']); ?></td>
+                <td class="py-2 px-3 border"><?php echo htmlspecialchars($row['batch_number']); ?></td>
                 <td class="py-2 px-3 border"><?php echo htmlspecialchars($row['requested_by']); ?></td>
                 <td class="py-2 px-3 border"><?php echo htmlspecialchars($row['description']); ?></td>
                 <td class="py-2 px-3 border"><?php echo $qc_text; ?></td>

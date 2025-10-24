@@ -4,7 +4,7 @@ include 'db_con.php';
 $bom_id = $_GET['id'] ?? 0;
 
 // ✅ Fetch production + product + QC details
-$sql = "SELECT pr.*, p.name AS product_name, bom.requested_by, bom.description, bom.bom_date, qc.created_at AS qc_date
+$sql = "SELECT pr.*, p.name AS product_name, bom.requested_by, bom.description, bom.bom_date, bom.batch_number, qc.created_at AS qc_date
         FROM production_runs pr
         JOIN bill_of_materials bom ON pr.request_id = bom.id
         JOIN products p ON bom.product_id = p.id
@@ -55,7 +55,7 @@ if ($pack_result && $pack_result->num_rows > 0) {
 // ✅ Fetch Bill of Materials (BOM) data for this product
 $bom_stmt = $conn->prepare("
   SELECT b.id, b.product_id, p.name AS product_name, b.status, b.description,
-         b.requested_by, b.bom_date, b.issued_by, b.remarks, b.issue_date
+         b.requested_by, b.bom_date, b.issued_by, b.remarks, b.issue_date, b.batch_number
   FROM bill_of_materials b
   JOIN products p ON b.product_id = p.id
   WHERE b.id = ?
@@ -121,6 +121,9 @@ foreach ($packaging_items as $pack) {
         <h1 class="text-2xl font-bold text-gray-800">FINISHED PRODUCT DETAILS</h1>
         <p class="text-sm text-gray-600">PRODUCT NAME:
           <span class="font-semibold text-blue-700"><?= htmlspecialchars($production['product_name']) ?></span>
+        </p>
+        <p class="text-sm text-gray-600">BATCH NUMBER:
+          <span class="font-semibold text-blue-700"><?= htmlspecialchars($production['batch_number']) ?></span>
         </p>
         <p class="text-sm text-gray-600">REQUESTED BY:
           <span class="font-semibold"><?= htmlspecialchars($production['requested_by']) ?></span>
@@ -370,41 +373,49 @@ $total_production_cost = $total_cost + $total_packaging_cost;
     
     <!-- ✅ Quality Manager Review -->
     <?php
-    $review = $conn->query("
-      SELECT * FROM quality_manager_review 
-      WHERE qc_inspection_id IN (SELECT id FROM qc_inspections WHERE production_run_id = {$production['id']})
-      ORDER BY checklist_no ASC
-    ");
-    ?>
-    <div class="bg-white shadow-lg rounded-lg p-6 border mb-8">
-      <h2 class="text-lg font-bold mb-4 text-purple-700">Quality Manager Review</h2>
-      <?php if ($review && $review->num_rows > 0): ?>
-        <table class="min-w-full border text-sm">
-          <thead class="bg-purple-100">
-            <tr>
-              <th class="border px-3 py-1">#</th>
-              <th class="border px-3 py-1">Checklist Item</th>
-              <th class="border px-3 py-1">Response</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php 
-            $n = 1;
-            while ($r = $review->fetch_assoc()): ?>
-              <tr>
-                <td class="border px-3 py-1"><?= $n++ ?></td>
-                <td class="border px-3 py-1"><?= htmlspecialchars($r['checklist_item']) ?></td>
-                <td class="border px-3 py-1 font-semibold <?= $r['response'] == 'Yes' ? 'text-green-600' : 'text-red-600' ?>">
-                  <?= htmlspecialchars($r['response']) ?>
-                </td>
-              </tr>
-            <?php endwhile; ?>
-          </tbody>
-        </table>
-      <?php else: ?>
-        <p class="text-gray-500 italic">No Quality Manager review data recorded yet.</p>
-      <?php endif; ?>
-    </div>
+   // ✅ Fetch Quality Manager Review directly using production_run_id
+
+
+$review = $conn->query("
+  SELECT * FROM quality_manager_review 
+  WHERE production_run_id = {$production['id']}
+  ORDER BY checklist_no ASC
+");
+?>
+<div class="bg-white shadow-lg rounded-lg p-6 border mb-8">
+  <h2 class="text-lg font-bold mb-4 text-purple-700">Quality Manager Review</h2>
+  <?php if ($review && $review->num_rows > 0): ?>
+    <table class="min-w-full border text-sm">
+      <thead class="bg-purple-100">
+        <tr>
+          <th class="border px-3 py-1">#</th>
+          <th class="border px-3 py-1">Checklist Item</th>
+          <th class="border px-3 py-1">Response</th>
+          <th class="border px-3 py-1">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php 
+        $n = 1;
+        while ($r = $review->fetch_assoc()): ?>
+          <tr>
+            <td class="border px-3 py-1"><?= $n++ ?></td>
+            <td class="border px-3 py-1"><?= htmlspecialchars($r['checklist_item']) ?></td>
+            <td class="border px-3 py-1 font-semibold <?= $r['response'] == 'Yes' ? 'text-green-600' : 'text-red-600' ?>">
+              <?= htmlspecialchars($r['response']) ?>
+            </td>
+            <td class="border px-3 py-1 font-semibold 
+                <?= $r['status'] == 'Approved' ? 'text-green-700' : 'text-yellow-600' ?>">
+              <?= htmlspecialchars($r['status']) ?>
+            </td>
+          </tr>
+        <?php endwhile; ?>
+      </tbody>
+    </table>
+  <?php else: ?>
+    <p class="text-gray-500 italic">No Quality Manager review data recorded yet.</p>
+  <?php endif; ?>
+</div>
 
     <!-- ✅ Back Button -->
      <!--

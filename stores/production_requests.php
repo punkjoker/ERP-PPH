@@ -10,6 +10,7 @@ $sql = "SELECT
             b.status,
             b.requested_by,
             b.description,
+            b.batch_number,
             p.name AS product_name
         FROM bill_of_materials b
         JOIN products p ON b.product_id = p.id
@@ -39,6 +40,7 @@ $boms = $conn->query($sql)->fetch_all(MYSQLI_ASSOC);
                     <tr>
                         <th class="border px-4 py-2 text-left">Date</th>
                         <th class="border px-4 py-2 text-left">Product</th>
+                        <th class="border px-4 py-2 text-left">Batch Number</th>
                         <th class="border px-4 py-2 text-left">Requested By</th>
                         <th class="border px-4 py-2 text-left">Description</th>
                         <th class="border px-4 py-2 text-left">Status</th>
@@ -51,6 +53,7 @@ $boms = $conn->query($sql)->fetch_all(MYSQLI_ASSOC);
                         <tr class="hover:bg-gray-50">
                             <td class="border px-4 py-2"><?= htmlspecialchars($b['bom_date']) ?></td>
                             <td class="border px-4 py-2"><?= htmlspecialchars($b['product_name']) ?></td>
+                            <td class="border px-4 py-2"><?= htmlspecialchars($b['batch_number']) ?></td>
                             <td class="border px-4 py-2"><?= htmlspecialchars($b['requested_by']) ?></td>
                             <td class="border px-4 py-2"><?= htmlspecialchars($b['description']) ?></td>
                             <td class="border px-4 py-2 font-semibold 

@@ -145,6 +145,7 @@ $stmt->close();
                 <tr>
                     <th class="border px-3 py-2">#</th>
                     <th class="border px-3 py-2">Expense Date</th>
+                    
                     <th class="border px-3 py-2">Items Bought By</th>
                     <th class="border px-3 py-2">Total Amount</th>
                     <th class="border px-3 py-2">Actions</th>
@@ -160,11 +161,11 @@ $stmt->close();
                             <td class="border px-3 py-2"><?= number_format($be['total_amount'], 2) ?></td>
                             <td class="border px-3 py-2 space-x-2">
                                <!-- Edit Button -->
-<button 
-  onclick="openEditModal(<?= $be['breakfast_id'] ?>, '<?= htmlspecialchars($be['expense_date']) ?>', '<?= htmlspecialchars($be['items_bought_by']) ?>', <?= $be['total_amount'] ?>)"
-  class="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 transition">
-  Edit
-</button>
+<a href="edit_breakfast_expense.php?id=<?= $be['breakfast_id'] ?>" 
+   class="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 transition">
+   Edit
+</a>
+
 
                                 <a href="view_breakfast_expense.php?id=<?= $be['breakfast_id'] ?>" class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition">View</a>
                             </td>

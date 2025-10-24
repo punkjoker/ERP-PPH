@@ -141,7 +141,7 @@ if ($history->num_rows > 0) {
 
     <!-- Buttons -->
     <div class="mb-4 flex gap-3 no-print">
-      <a href="stock_out.php" class="bg-gray-500 text-white px-3 py-1.5 rounded hover:bg-gray-600 text-sm">Back</a>
+      
       <button onclick="printHistory()" class="bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 text-sm">Print</button>
       <a href="view_history.php?stock_code=<?php echo urlencode($stock_code); ?>&download=pdf"
          class="bg-red-600 text-white px-3 py-1.5 rounded hover:bg-red-700 text-sm">Save as PDF</a>

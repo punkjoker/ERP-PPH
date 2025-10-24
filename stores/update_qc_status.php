@@ -4,7 +4,7 @@ include 'db_con.php';
 $bom_id = $_GET['id'] ?? 0;
 
 // ✅ Fetch full production and product details
-$sql = "SELECT pr.*, p.name AS product_name, bom.requested_by, bom.description, bom.bom_date
+$sql = "SELECT pr.*, p.name AS product_name, bom.requested_by, bom.description, bom.bom_date, bom.batch_number
         FROM production_runs pr
         JOIN bill_of_materials bom ON pr.request_id = bom.id
         JOIN products p ON bom.product_id = p.id
@@ -51,6 +51,9 @@ if ($qc_status_query && $qc_status_query->num_rows > 0) {
         <h1 class="text-2xl font-bold text-gray-800">QUALITY CONTROL INSPECTION (QF-29)</h1>
         <p class="text-sm text-gray-600">PRODUCT NAME:
           <span class="font-semibold text-blue-700"><?= htmlspecialchars($production['product_name']) ?></span>
+        </p>
+        <p class="text-sm text-gray-600">BATCH NUMBER:
+          <span class="font-semibold text-blue-700"><?= htmlspecialchars($production['batch_number']) ?></span>
         </p>
         <p class="text-sm text-gray-600">REQUESTED BY:
           <span class="font-semibold"><?= htmlspecialchars($production['requested_by']) ?></span>
@@ -201,46 +204,7 @@ if (empty($production['expected_yield'])) {
     <button type="button" @click="tests.push({test:'',spec:'',proc:''})" class="bg-blue-500 text-white px-3 py-1 rounded text-sm">+ Add Test</button>
   </div>
 
-  <!-- Quality Manager Review -->
-  <div class="bg-white p-6 rounded-lg shadow mb-6">
-    <h2 class="text-lg font-bold mb-4 text-gray-800">Quality Manager Review</h2>
-    <table class="min-w-full text-sm border">
-      <thead class="bg-gray-100">
-        <tr>
-          <th class="border px-2 py-1">No.</th>
-          <th class="border px-2 py-1">Checklist</th>
-          <th class="border px-2 py-1">Yes</th>
-          <th class="border px-2 py-1">No</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php
-          $checklist = [
-            "All production processes have been fully followed and complied",
-            "Quality Control Processes have been fully followed.",
-            "All QC reports are duly filled, recorded, and signed.",
-            "Final product complies with standard specifications.",
-            "Final product complies with packaging specifications.",
-            "Retain sample collected and stored.",
-            "All blank spaces have been fully filled.",
-            "Certificate of Analysis complies with test results.",
-            "Product released for sale."
-          ];
-          foreach ($checklist as $i => $item) {
-            echo "
-              <tr>
-                <td class='border px-2 py-1 text-center'>".($i+1)."</td>
-                <td class='border px-2 py-1'>$item</td>
-                <td class='border px-2 py-1 text-center'><input type='radio' name='checklist_$i' value='Yes'></td>
-                <td class='border px-2 py-1 text-center'><input type='radio' name='checklist_$i' value='No'></td>
-              </tr>
-            ";
-          }
-        ?>
-      </tbody>
-    </table>
-  </div>
-
+  
   <!-- QC Status (moved here) -->
   <div class="bg-white p-6 rounded-lg shadow mb-6">
     <label class="block font-semibold text-gray-700 mb-2">Final QC Status</label>

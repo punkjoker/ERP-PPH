@@ -1,24 +1,57 @@
-<?php
+<?php 
 include 'db_con.php';
 
-// --- 1. Count Disposals ---
-$disposals_query = $conn->query("SELECT COUNT(*) AS total_disposals FROM disposables");
-$disposals = $disposals_query->fetch_assoc()['total_disposals'] ?? 0;
+// --- DATE FILTER ---
+$from_date = $_GET['from_date'] ?? date('Y-m-01');
+$to_date = $_GET['to_date'] ?? date('Y-m-t');
 
-// --- 2. QC Inspection Status Counts ---
-$qcs_query = $conn->query("
+// --- 1️⃣ Count Disposals ---
+$stmt = $conn->prepare("
+    SELECT COUNT(*) AS total_disposals 
+    FROM disposables 
+    WHERE DATE(disposal_date) BETWEEN ? AND ?
+");
+$stmt->bind_param("ss", $from_date, $to_date);
+$stmt->execute();
+$disposals = $stmt->get_result()->fetch_assoc()['total_disposals'] ?? 0;
+
+// --- 2️⃣ QC Inspection Status Counts ---
+$stmt = $conn->prepare("
     SELECT 
         SUM(qc_status = 'Approved Product') AS approved,
         SUM(qc_status = 'Not Approved') AS not_approved
     FROM qc_inspections
+    WHERE DATE(created_at) BETWEEN ? AND ?
 ");
-$qcs = $qcs_query->fetch_assoc();
+$stmt->bind_param("ss", $from_date, $to_date);
+$stmt->execute();
+$qcs = $stmt->get_result()->fetch_assoc();
 $approved = $qcs['approved'] ?? 0;
 $not_approved = $qcs['not_approved'] ?? 0;
 
-// --- 3. Inspected Chemicals ---
-$chemicals_query = $conn->query("SELECT COUNT(*) AS total_chemicals FROM inspected_chemicals_in");
-$chemicals = $chemicals_query->fetch_assoc()['total_chemicals'] ?? 0;
+// --- 3️⃣ Inspected Chemicals Summary (Approved Times per Chemical) ---
+$stmt = $conn->prepare("
+    SELECT 
+        ch.chemical_name,
+        COUNT(ic.id) AS approved_count
+    FROM inspected_chemicals_in ic
+    JOIN chemicals_in ci ON ic.chemical_id = ci.id
+    JOIN chemical_names ch ON ci.chemical_code = ch.id
+    WHERE DATE(ic.created_at) BETWEEN ? AND ?
+    GROUP BY ch.chemical_name
+    ORDER BY approved_count DESC
+");
+
+$stmt->bind_param("ss", $from_date, $to_date);
+$stmt->execute();
+$chem_result = $stmt->get_result();
+
+$chemical_names = [];
+$approved_counts = [];
+while ($row = $chem_result->fetch_assoc()) {
+    $chemical_names[] = $row['chemical_name'];
+    $approved_counts[] = $row['approved_count'];
+}
 ?>
 
 <!DOCTYPE html>
@@ -29,14 +62,29 @@ $chemicals = $chemicals_query->fetch_assoc()['total_chemicals'] ?? 0;
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body class="bg-gray-100">
+<body class="bg-gradient-to-br from-blue-100 via-blue-200 to-blue-300 min-h-screen">
 
 <?php include 'navbar.php'; ?>
 
 <div class="ml-64 p-6">
-  <h1 class="text-3xl font-bold text-blue-700 mb-6">Quality Control Reports</h1>
+  <h1 class="text-3xl font-bold text-blue-800 mb-6">Quality Control Reports</h1>
 
-  <!-- Stats Summary Cards -->
+  <!-- 📅 Filter Form -->
+  <form method="GET" class="flex flex-wrap gap-4 bg-white shadow-md p-4 rounded-lg mb-8">
+    <div>
+      <label class="block text-sm font-semibold text-gray-600 mb-1">From Date</label>
+      <input type="date" name="from_date" value="<?= $from_date ?>" class="border p-2 rounded w-48 focus:ring-blue-400 focus:border-blue-400">
+    </div>
+    <div>
+      <label class="block text-sm font-semibold text-gray-600 mb-1">To Date</label>
+      <input type="date" name="to_date" value="<?= $to_date ?>" class="border p-2 rounded w-48 focus:ring-blue-400 focus:border-blue-400">
+    </div>
+    <div class="flex items-end">
+      <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">Filter</button>
+    </div>
+  </form>
+
+  <!-- 🧾 Stats Summary -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
     <div class="bg-white shadow-lg rounded-2xl p-6 text-center">
       <h2 class="text-gray-500 font-semibold mb-2">Total Disposals</h2>
@@ -47,86 +95,57 @@ $chemicals = $chemicals_query->fetch_assoc()['total_chemicals'] ?? 0;
       <p class="text-4xl font-bold text-green-600"><?= $approved ?></p>
     </div>
     <div class="bg-white shadow-lg rounded-2xl p-6 text-center">
-      <h2 class="text-gray-500 font-semibold mb-2">Inspected Chemicals</h2>
-      <p class="text-4xl font-bold text-purple-600"><?= $chemicals ?></p>
+      <h2 class="text-gray-500 font-semibold mb-2">QC Not Approved</h2>
+      <p class="text-4xl font-bold text-red-600"><?= $not_approved ?></p>
     </div>
   </div>
 
-  <!-- Charts Section -->
+  <!-- 📊 Charts -->
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-    <!-- Disposal Chart -->
-    <div class="bg-white shadow rounded-2xl p-6">
-      <h2 class="text-xl font-semibold text-gray-700 mb-4">Disposals Overview</h2>
-      <canvas id="disposalChart"></canvas>
-    </div>
-
     <!-- QC Status Chart -->
     <div class="bg-white shadow rounded-2xl p-6">
-      <h2 class="text-xl font-semibold text-gray-700 mb-4">QC Inspection Status</h2>
+      <h2 class="text-xl font-semibold text-gray-700 mb-4">QC Inspection Status (<?= htmlspecialchars($from_date) ?> to <?= htmlspecialchars($to_date) ?>)</h2>
       <canvas id="qcStatusChart"></canvas>
     </div>
-  </div>
 
-  <!-- Chemical Chart -->
-  <div class="bg-white shadow rounded-2xl p-6 mt-8">
-    <h2 class="text-xl font-semibold text-gray-700 mb-4">Inspected Chemicals Summary</h2>
-    <canvas id="chemicalChart"></canvas>
+    <!-- Chemical Chart -->
+    <div class="bg-white shadow rounded-2xl p-6">
+      <h2 class="text-xl font-semibold text-gray-700 mb-4">Approved Times per Chemical</h2>
+      <canvas id="chemicalChart"></canvas>
+    </div>
   </div>
 </div>
 
 <script>
-  // Chart 1: Disposal count (just a simple single-value representation)
-  const disposalCtx = document.getElementById('disposalChart').getContext('2d');
-  new Chart(disposalCtx, {
-    type: 'bar',
-    data: {
-      labels: ['Total Disposals'],
-      datasets: [{
-        label: 'Disposals',
-        data: [<?= $disposals ?>],
-        backgroundColor: ['#3b82f6']
-      }]
-    },
-    options: {
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true } }
-    }
-  });
-
-  // Chart 2: QC Approved vs Not Approved
+  // QC Status Chart
   const qcCtx = document.getElementById('qcStatusChart').getContext('2d');
   new Chart(qcCtx, {
     type: 'doughnut',
     data: {
       labels: ['Approved', 'Not Approved'],
       datasets: [{
-        label: 'QC Status',
         data: [<?= $approved ?>, <?= $not_approved ?>],
         backgroundColor: ['#10b981', '#ef4444']
       }]
     },
-    options: {
-      plugins: {
-        legend: { position: 'bottom' }
-      }
-    }
+    options: { plugins: { legend: { position: 'bottom' } } }
   });
 
-  // Chart 3: Inspected Chemicals trend (static since no time series)
-  const chemicalCtx = document.getElementById('chemicalChart').getContext('2d');
-  new Chart(chemicalCtx, {
+  // Approved per Chemical Chart
+  const chemCtx = document.getElementById('chemicalChart').getContext('2d');
+  new Chart(chemCtx, {
     type: 'bar',
     data: {
-      labels: ['Inspected Chemicals'],
+      labels: <?= json_encode($chemical_names) ?>,
       datasets: [{
-        label: 'Total Inspected',
-        data: [<?= $chemicals ?>],
-        backgroundColor: ['#8b5cf6']
+        label: 'Approved Times',
+        data: <?= json_encode($approved_counts) ?>,
+        backgroundColor: '#3b82f6'
       }]
     },
     options: {
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true } }
+      scales: { x: { ticks: { autoSkip: false, maxRotation: 45 } }, y: { beginAtZero: true } },
+      plugins: { legend: { display: false } }
     }
   });
 </script>

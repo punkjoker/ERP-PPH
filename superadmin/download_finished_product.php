@@ -5,15 +5,32 @@ include 'db_con.php';
 $bom_id = $_GET['id'] ?? 0;
 
 // ✅ Fetch production + product + QC details
-$sql = "SELECT pr.*, p.name AS product_name, bom.requested_by, bom.description, bom.bom_date, bom.batch_number, qc.created_at AS qc_date
-        FROM production_runs pr
-        JOIN bill_of_materials bom ON pr.request_id = bom.id
-        JOIN products p ON bom.product_id = p.id
-        LEFT JOIN qc_inspections qc ON qc.production_run_id = pr.id
-        WHERE pr.request_id = $bom_id LIMIT 1";
+$sql = "
+SELECT 
+    pr.*, 
+    p.name AS product_name, 
+    p.product_code,
+    bom.requested_by, 
+    bom.description, 
+    bom.bom_date, 
+    bom.batch_number,
+    qc.created_at AS qc_date,
+    SUM(bm.std_quantity) AS std_batch_size  -- sum of standard quantities
+FROM production_runs pr
+JOIN bill_of_materials bom ON pr.request_id = bom.id
+JOIN products p ON bom.product_id = p.id
+LEFT JOIN qc_inspections qc ON qc.production_run_id = pr.id
+LEFT JOIN bom b ON b.product_id = p.id
+LEFT JOIN bom_materials bm ON bm.bom_id = b.id
+WHERE pr.request_id = $bom_id
+GROUP BY pr.id
+LIMIT 1
+";
+
 $result = $conn->query($sql);
 if (!$result || $result->num_rows === 0) die("No record found for this product.");
 $production = $result->fetch_assoc();
+
 
 // ✅ Fetch BOM
 $bom_stmt = $conn->prepare("
@@ -107,12 +124,12 @@ if(count($packaging_items) > 0) {
 
 
     $rows = [
-        ['PRODUCT NAME', $data['product_name'], 'PRODUCT CODE', '209024'],
+         ['PRODUCT NAME', $data['product_name'], 'PRODUCT CODE', $data['product_code']], // dynamic code
         ['BATCH NUMBER', $data['batch_number'], 'EDITION NO.', '007'],
-        ['MFG. DATE', date('d M Y', strtotime($data['bom_date'])), 'STD BATCH SIZE', '1000 LTRS'],
+        ['MFG. DATE', date('d M Y', strtotime($data['bom_date'])), 'STD BATCH SIZE', $data['std_batch_size'].' Kg'], // dynamic
         ['EXP. DATE', '', 'ACTUAL BATCH SIZE', $data['obtained_yield']],  // ✅ Actual batch from obtained_yield
         ['EFFECTIVE DATE', '1ST SEPTEMBER 2024', 'PACK SIZE', $pack_size_full], // ✅ full pack size
-        ['REVIEW DATE', '1ST AUGUST 2027', 'PAGES', '1 of 7']
+        ['REVIEW DATE', '1ST AUGUST 2027', 'PAGES', '1 of 1']
     ];
 
     foreach ($rows as $row) {
@@ -267,6 +284,27 @@ if($review && $review->num_rows > 0){
 } else {
     $pdf->Cell(0,8,'No Quality Manager review recorded.',0,1);
 }
+
+// -------------------------
+// Batch Release Section
+// -------------------------
+$pdf->Ln(6); // small gap after QC/Review tables
+$pdf->SetFont('Arial', 'B', 10);
+
+$pdf->Cell(0, 6, 'BATCH RELEASE FOR SALE', 0, 1, 'C');
+$pdf->Ln(4);
+
+$pdf->SetFont('Arial', '', 10);
+$pdf->Cell(0, 6, 'Approved By : _________________________   Sign: ___________   Date: ______________', 0, 1, 'C');
+$pdf->Cell(0, 6, 'QUALITY MANAGER', 0, 1, 'C');
+$pdf->Ln(4);
+
+$pdf->Cell(0, 6, 'Authorized By : ________________________   Sign: ___________   Date: _______________', 0, 1, 'C');
+$pdf->Cell(0, 6, 'TECHNICAL DIRECTOR', 0, 1, 'C');
+$pdf->Ln(4);
+
+$pdf->SetFont('Arial', 'I', 9);
+$pdf->MultiCell(0, 5, 'NB: THE BATCH CAN ONLY BE POSTED INTO THE SYSTEM UPON RELEASE FOR SALE.', 0, 'C');
 
 // ✅ Output PDF
 $pdf->Output('D', 'Finished_Product_Report_'.$production['product_name'].'.pdf');

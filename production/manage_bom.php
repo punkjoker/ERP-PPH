@@ -30,10 +30,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['product_id'])) {
 
     if ($product_id && !empty($chemicals_selected)) {
         // Insert main BOM record
-        $stmt = $conn->prepare("INSERT INTO bill_of_materials 
-            (product_id, bom_date, requested_by, description, status) 
-            VALUES (?, ?, ?, ?, 'Pending')");
-        $stmt->bind_param("isss", $product_id, $bom_date, $requested_by, $description);
+       $batch_number = $_POST['batch_number'] ?? '';
+
+$stmt = $conn->prepare("INSERT INTO bill_of_materials 
+    (product_id, bom_date, batch_number, requested_by, description, status) 
+    VALUES (?, ?, ?, ?, ?, 'Pending')");
+$stmt->bind_param("issss", $product_id, $bom_date, $batch_number, $requested_by, $description);
+
         $stmt->execute();
         $bom_id = $stmt->insert_id;
         $stmt->close();
@@ -79,6 +82,7 @@ if (!empty($_GET['from']) && !empty($_GET['to'])) {
 $sql = "SELECT 
             b.id AS bom_id,
             b.bom_date,
+            b.batch_number,
             b.created_at,
             b.status,
             b.requested_by,
@@ -294,6 +298,11 @@ document.addEventListener("DOMContentLoaded", function () {
                     <label class="block text-gray-700 font-semibold mb-1">BOM Date</label>
                     <input type="date" name="bom_date" required class="border rounded px-3 py-2 w-full">
                 </div>
+                <div>
+    <label class="block text-gray-700 font-semibold mb-1">Batch Number</label>
+    <input type="text" name="batch_number" required 
+        class="border rounded px-3 py-2 w-full" placeholder="e.g. BATCH-2025-01">
+</div>
 <div>
     <label class="block text-gray-700 font-semibold mb-1">Requested By</label>
     <input type="text" name="requested_by" required 
@@ -388,6 +397,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 <thead class="bg-gray-200">
     <tr>
         <th class="border px-3 py-2 text-left">Date</th>
+        <th class="border px-3 py-2 text-left">Batch No.</th>
         <th class="border px-3 py-2 text-left">Product</th>
         <th class="border px-3 py-2 text-left">Requested By</th>
         <th class="border px-3 py-2 text-left">Description</th>
@@ -401,6 +411,7 @@ document.addEventListener("DOMContentLoaded", function () {
     <?php foreach ($boms as $b): ?>
         <tr>
             <td class="border px-3 py-2"><?= htmlspecialchars($b['bom_date']) ?></td>
+            <td class="border px-3 py-2"><?= htmlspecialchars($b['batch_number']) ?></td>
             <td class="border px-3 py-2"><?= htmlspecialchars($b['product_name']) ?></td>
             <td class="border px-3 py-2"><?= htmlspecialchars($b['requested_by']) ?></td>
             <td class="border px-3 py-2"><?= htmlspecialchars($b['description']) ?></td>
