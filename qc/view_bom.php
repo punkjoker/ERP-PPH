@@ -9,7 +9,7 @@ if (!isset($_GET['id'])) {
 $bom_id = intval($_GET['id']);
 
 // Fetch BOM main info
-$sql = "SELECT b.id, b.product_id, p.name as product_name, b.status, b.description, b.requested_by, b.bom_date, 
+$sql = "SELECT b.id, b.product_id, p.name as product_name,  b.batch_number, b.status, b.description, b.requested_by, b.bom_date, 
                b.issued_by, b.remarks, b.issue_date
         FROM bill_of_materials b
         JOIN products p ON b.product_id = p.id
@@ -97,6 +97,7 @@ foreach ($chemicals as $c) {
             <div class="mb-6">
                 <h2 class="text-xl font-semibold text-gray-800 mb-2">Product Details</h2>
                 <p><span class="font-semibold">Product Name:</span> <?= htmlspecialchars($bom['product_name']) ?></p>
+                <p><span class="font-semibold">Batch Number:</span> <?= htmlspecialchars($bom['batch_number']) ?></p>
                 <p><span class="font-semibold">Quantity to Produce:</span> <?= number_format($total_quantity_requested, 2) ?>kgs/ltrs</p>
                 <p><span class="font-semibold">Status:</span> <?= htmlspecialchars($bom['status']) ?></p>
             </div>

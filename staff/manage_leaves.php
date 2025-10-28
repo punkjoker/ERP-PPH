@@ -125,7 +125,8 @@ $selected_year = isset($_GET['year']) ? intval($_GET['year']) : date('Y');
             <tbody>
             <?php if(!empty($leaves)): $count=1; ?>
                 <?php foreach($leaves as $leave):
-                    $days = $leave['total_days'];
+                    $days = (strtotime($leave['end_date']) - strtotime($leave['start_date'])) / (60*60*24) + 1;
+
                 ?>
                     <tr class="<?= ($count%2==0)?'bg-gray-50':'bg-white' ?> hover:bg-blue-50">
                         <td class="border px-3 py-2"><?= $count++ ?></td>
@@ -148,22 +149,40 @@ $selected_year = isset($_GET['year']) ? intval($_GET['year']) : date('Y');
 </div>
 
 <script>
-document.getElementById('leaveTypeSelect').addEventListener('change', updateLeaveBalance);
+const leaveSelect = document.getElementById('leaveTypeSelect');
+const leaveBalanceDiv = document.getElementById('leaveBalance');
+
+leaveSelect.addEventListener('change', updateLeaveBalance);
 
 function updateLeaveBalance() {
-    const type = document.getElementById('leaveTypeSelect').value;
-    if(type) {
-        fetch(`get_leave_balance.php?user_id=<?= $user_id ?>&leave_type=${type}`)
-        .then(res => res.json())
-        .then(data => {
-            document.getElementById('leaveBalance').textContent = 
-                `Remaining ${type} Leave: ${data.remaining} days (Taken: ${data.taken})`;
-        });
-    } else {
-        document.getElementById('leaveBalance').textContent = '';
-    }
-}
+    const leaveType = leaveSelect.value;
 
+    // Clear balance if no leave type selected
+    if (!leaveType) {
+        leaveBalanceDiv.textContent = '';
+        return;
+    }
+
+    // Fetch remaining leave from server
+    fetch(`get_leave_balance.php?user_id=<?= $user_id ?>&leave_type=${encodeURIComponent(leaveType)}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Network response was not OK');
+            return response.json();
+        })
+        .then(data => {
+            // Check if data contains expected fields
+            if (data && typeof data.remaining !== 'undefined' && typeof data.taken !== 'undefined') {
+                leaveBalanceDiv.textContent = 
+                    `Remaining ${leaveType} Leave: ${data.remaining} day(s) (Taken: ${data.taken} day(s))`;
+            } else {
+                leaveBalanceDiv.textContent = 'Unable to fetch leave balance.';
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching leave balance:', error);
+            leaveBalanceDiv.textContent = 'Error fetching leave balance.';
+        });
+}
 </script>
 
 </body>

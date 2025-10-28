@@ -9,7 +9,7 @@ $to_date   = isset($_GET['to_date']) ? $_GET['to_date'] : '';
 $query = "
 SELECT 
     bom.id, 
-    bom.bom_date, 
+    bom.created_at, 
     bom.requested_by, 
     bom.description, 
     p.name AS product_name,
@@ -39,10 +39,10 @@ WHERE pr.status = 'Completed'
 
 // ✅ Add date filter if applied
 if ($from_date && $to_date) {
-    $query .= " AND bom.bom_date BETWEEN '$from_date' AND '$to_date'";
+    $query .= " AND bom.created_at BETWEEN '$from_date' AND '$to_date'";
 }
 
-$query .= " ORDER BY bom.bom_date DESC";
+$query .= " ORDER BY bom.created_at DESC";
 
 $result = $conn->query($query);
 if (!$result) {
@@ -103,7 +103,7 @@ if (!$result) {
             <?php if ($result->num_rows > 0): ?>
               <?php while ($row = $result->fetch_assoc()): ?>
                 <tr class="hover:bg-blue-50 transition">
-                  <td class="py-1 px-3 border"><?php echo htmlspecialchars($row['bom_date']); ?></td>
+                  <td class="py-1 px-3 border"><?php echo htmlspecialchars($row['created_at']); ?></td>
                   <td class="py-1 px-3 border"><?php echo htmlspecialchars($row['product_name']); ?></td>
                   <td class="py-1 px-3 border"><?php echo htmlspecialchars($row['requested_by']); ?></td>
                   <td class="py-1 px-3 border"><?php echo htmlspecialchars($row['description']); ?></td>

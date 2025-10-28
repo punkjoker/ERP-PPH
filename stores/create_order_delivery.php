@@ -34,19 +34,108 @@ $stmt->bind_param("isss", $delivery_id, $remarks, $invoice_number, $delivery_num
             $stmt->close();
 
             // Subtract from appropriate source table.
-            // For chemicals_in and finished_products we want to deduct from the specific record (item_id).
-            if ($item_id > 0 && $quantity_removed > 0) {
-                if ($source_table === 'chemicals_in') {
-                    $u = $conn->prepare("UPDATE chemicals_in SET remaining_quantity = GREATEST(0, remaining_quantity - ?) WHERE id = ?");
-                    $u->bind_param("di", $quantity_removed, $item_id);
-                    $u->execute();
-                    $u->close();
+           if ($source_table === 'chemicals_in') {
+    $remaining_to_remove = $quantity_removed;
+
+    // ✅ Fetch the chemical name for the selected lot
+    $chemQuery = $conn->prepare("SELECT chemical_name FROM chemicals_in WHERE id = ?");
+    $chemQuery->bind_param("i", $item_id);
+    $chemQuery->execute();
+    $chemQuery->bind_result($chemical_name);
+    $chemQuery->fetch();
+    $chemQuery->close();
+
+    if (!empty($chemical_name)) {
+        // ✅ Fetch lots for this chemical ordered by oldest rm_lot_no or id
+        $lotQuery = $conn->prepare("
+            SELECT id, remaining_quantity
+            FROM chemicals_in
+            WHERE chemical_name = ? AND remaining_quantity > 0
+            ORDER BY id ASC
+        ");
+        $lotQuery->bind_param("s", $chemical_name);
+        $lotQuery->execute();
+        $lots = $lotQuery->get_result();
+
+        // ✅ Deduct from lots sequentially
+        while ($lot = $lots->fetch_assoc()) {
+            if ($remaining_to_remove <= 0) break;
+
+            $lot_id = $lot['id'];
+            $lot_remaining = $lot['remaining_quantity'];
+
+            if ($lot_remaining >= $remaining_to_remove) {
+                $u = $conn->prepare("UPDATE chemicals_in SET remaining_quantity = remaining_quantity - ? WHERE id = ?");
+                $u->bind_param("di", $remaining_to_remove, $lot_id);
+                $u->execute();
+                $u->close();
+                $remaining_to_remove = 0;
+            } else {
+                $u = $conn->prepare("UPDATE chemicals_in SET remaining_quantity = 0 WHERE id = ?");
+                $u->bind_param("i", $lot_id);
+                $u->execute();
+                $u->close();
+                $remaining_to_remove -= $lot_remaining;
+            }
+        }
+        $lotQuery->close();
+
+        if ($remaining_to_remove > 0) {
+            error_log("⚠️ Not enough chemical stock to remove full $quantity_removed units for $chemical_name");
+        }
+    } else {
+        error_log("⚠️ Chemical ID $item_id not found in chemicals_in");
+    }
+
                 } elseif ($source_table === 'finished_products') {
-                    $u = $conn->prepare("UPDATE finished_products SET remaining_size = GREATEST(0, remaining_size - ?) WHERE id = ?");
-                    $u->bind_param("di", $quantity_removed, $item_id);
-                    $u->execute();
-                    $u->close();
-               } elseif ($source_table === 'stock_in') {
+    $remaining_to_remove = $quantity_removed;
+
+    // ✅ Fetch batches of this product ordered by oldest batch first
+    $batchQuery = $conn->prepare("
+        SELECT id, remaining_size 
+        FROM finished_products 
+        WHERE product_name = (
+            SELECT product_name FROM finished_products WHERE id = ?
+        ) 
+        AND remaining_size > 0
+        ORDER BY id ASC
+    ");
+    $batchQuery->bind_param("i", $item_id);
+    $batchQuery->execute();
+    $batches = $batchQuery->get_result();
+
+    // ✅ Deduct from batches sequentially
+    while ($batch = $batches->fetch_assoc()) {
+        if ($remaining_to_remove <= 0) break;
+
+        $batch_id = $batch['id'];
+        $batch_remaining = $batch['remaining_size'];
+
+        if ($batch_remaining >= $remaining_to_remove) {
+            // fully remove within this batch
+            $u = $conn->prepare("UPDATE finished_products SET remaining_size = remaining_size - ? WHERE id = ?");
+            $u->bind_param("di", $remaining_to_remove, $batch_id);
+            $u->execute();
+            $u->close();
+            $remaining_to_remove = 0;
+        } else {
+            // this batch is exhausted, move to next
+            $u = $conn->prepare("UPDATE finished_products SET remaining_size = 0 WHERE id = ?");
+            $u->bind_param("i", $batch_id);
+            $u->execute();
+            $u->close();
+            $remaining_to_remove -= $batch_remaining;
+        }
+    }
+    $batchQuery->close();
+
+    if ($remaining_to_remove > 0) {
+        // optional: record shortage or warning
+        error_log("Warning: Not enough stock to remove full $quantity_removed kg for $item_name");
+    }
+}
+
+                elseif ($source_table === 'stock_in') {
     $u = $conn->prepare("
         UPDATE stock_in 
         SET 
@@ -60,7 +149,7 @@ $stmt->bind_param("isss", $delivery_id, $remarks, $invoice_number, $delivery_num
 
             }
         }
-    }
+    
 
     $msg = "Delivery order created successfully!";
 }

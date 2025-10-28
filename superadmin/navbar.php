@@ -34,6 +34,7 @@
         <li><a href="create_staff_account.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-calendar-alt mr-2"></i>Create Staff Account</a></li>
         <li><a href="perfomance_evaluation_list.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-star mr-2"></i>Performance Evaluation</a></li>
         <li><a href="leaves_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-calendar-check mr-2"></i>Leaves request</a></li>
+        <li><a href="view_training_requests.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-invoice-dollar mr-2"></i>Training requests</a></li>
         <li><a href="manage_expenses.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-money-bill mr-2"></i>Add Expense</a></li>
         <li><a href="add_lunch_expense.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-utensils mr-2"></i>Lunch Expense</a></li>
         <li><a href="breakfast_expense.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-mug-hot mr-2"></i>Breakfast Expense</a></li>
@@ -128,6 +129,19 @@
       </ul>
     </div>
 
+      <div>
+      <h3 class="text-blue-700 font-semibold uppercase">Accounts</h3>
+      <ul class="ml-4 space-y-2 text-sm">
+         <li><a href="approved_purchases.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-list-check mr-2"></i>Purchase List</a></li>
+         <li><a href="purchases_list.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-list-xmark mr-2"></i>All Purchases</a></li>
+         <li><a href="manage_expenses.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-money-bill mr-2"></i>Add Expense</a></li>
+        <li><a href="add_lunch_expense.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-utensils mr-2"></i>Lunch Expense</a></li>
+        <li><a href="breakfast_expense.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-mug-hot mr-2"></i>Breakfast Expense</a></li>
+        <li><a href="payroll_details.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-invoice-dollar mr-2"></i>Payroll details</a></li>
+        <li><a href="payroll_deductions.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-minus mr-2"></i>Payroll Deductions</a></li>
+        <li><a href="Payroll_list.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-wallet mr-2"></i>Process Payroll</a></li>
+      </ul>
+    </div>
     <!-- Reports -->
     <div>
       <h3 class="text-blue-700 font-semibold uppercase">Reports</h3>

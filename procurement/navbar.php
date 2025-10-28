@@ -16,6 +16,7 @@
          <ul class="ml-4 space-y-2 text-sm">
         <li><a href="add_procurement_product.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-cart-plus mr-2"></i>Add Product</a></li>
         <li><a href="supplier_list.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-truck-field mr-2"></i>Supplier List</a></li>
+<li><a href="purchases_list.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-list-xmark mr-2"></i>All Purchases</a></li>
         <li><a href="purchase_order.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-signature mr-2"></i>New Purchase</a></li>
         <li><a href="approved_purchases.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-list-check mr-2"></i>Purchase List</a></li>
         <li><a href="department_requests.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-clipboard-list mr-2"></i>Department Requests</a></li>

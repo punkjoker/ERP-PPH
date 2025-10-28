@@ -57,24 +57,37 @@ if ($sourceFilter === '' || $sourceFilter === 'stock_in') {
 if (!empty($results)) {
     foreach ($results as $sourceTable => $rows) {
         foreach ($rows as $r) {
-            $batch = !empty($r['batch_no']) ? " (Batch: {$r['batch_no']})" : '';
             $label = htmlspecialchars($r['label']);
             $unit = htmlspecialchars($r['unit']);
             $remaining = htmlspecialchars($r['remaining']);
+            $batchNo = htmlspecialchars($r['batch_no'] ?? '');
+
+            // 🧠 Custom label: use "Batch" for finished_products & stock_in, "Lot" for chemicals_in
+            if (!empty($batchNo)) {
+                if ($sourceTable === 'chemicals_in') {
+                    $batchText = " (Lot: {$batchNo})";
+                } else {
+                    $batchText = " (Batch: {$batchNo})";
+                }
+            } else {
+                $batchText = '';
+            }
+
             echo "
             <div class='item-suggestion px-3 py-2 hover:bg-gray-100 cursor-pointer'
                 data-id='{$r['id']}'
-                data-label='{$label}{$batch}'
+                data-label='{$label}{$batchText}'
                 data-source='{$sourceTable}'
                 data-remaining='{$remaining}'
                 data-unit='{$unit}'>
-                {$label}{$batch} — {$remaining} {$unit}
+                {$label}{$batchText} — {$remaining} {$unit}
             </div>";
         }
     }
 } else {
     echo "<div class='px-3 py-2 text-gray-500 text-sm'>No matching items found.</div>";
 }
+
 
 $conn->close();
 ?>

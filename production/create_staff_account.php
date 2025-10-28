@@ -32,6 +32,8 @@ try {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $full_name = trim($_POST['full_name'] ?? '');
     $email     = trim($_POST['email'] ?? '');
+    $national_id = trim($_POST['national_id'] ?? '');
+
     $password  = $_POST['password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
     $group_id  = intval($_POST['group_id'] ?? 0);
@@ -47,12 +49,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
             if ($use_pdo) {
-                $insert = $pdo->prepare("INSERT INTO users (full_name, email, password, group_id) VALUES (?, ?, ?, ?)");
-                $insert->execute([$full_name, $email, $hashedPassword, $group_id]);
+                $insert = $pdo->prepare("INSERT INTO users (full_name, email, national_id, password, group_id) VALUES (?, ?, ?, ?, ?)");
+                $insert->execute([$full_name, $email, $national_id, $hashedPassword, $group_id]);
             } else {
-                $stmt = $conn->prepare("INSERT INTO users (full_name, email, password, group_id) VALUES (?, ?, ?, ?)");
+                $stmt = $conn->prepare("INSERT INTO users (full_name, email, national_id, password, group_id) VALUES (?, ?, ?, ?, ?)");
                 if ($stmt === false) throw new Exception("Prepare failed: " . $conn->error);
-                $stmt->bind_param("sssi", $full_name, $email, $hashedPassword, $group_id);
+                $stmt->bind_param("ssssi", $full_name, $email, $national_id, $hashedPassword, $group_id);
                 $stmt->execute();
                 if ($stmt->errno) throw new Exception("Execute failed: " . $stmt->error);
             }
@@ -69,17 +71,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+// Handle status update
+if (isset($_POST['update_status'])) {
+    $user_id = intval($_POST['user_id']);
+    $new_status = $_POST['new_status'] === 'inactive' ? 'inactive' : 'active';
+
+    try {
+        if ($use_pdo) {
+            $stmt = $pdo->prepare("UPDATE users SET status = ? WHERE user_id = ?");
+            $stmt->execute([$new_status, $user_id]);
+        } else {
+            $stmt = $conn->prepare("UPDATE users SET status = ? WHERE user_id = ?");
+            $stmt->bind_param("si", $new_status, $user_id);
+            $stmt->execute();
+        }
+        $success = "User status updated successfully!";
+    } catch (Exception $e) {
+        $error = "Failed to update user status: " . $e->getMessage();
+    }
+}
+
 // Fetch existing users
 $users = [];
 try {
     if ($use_pdo) {
-        $stmt = $pdo->query("SELECT u.user_id, u.full_name, u.email, u.status, g.group_name 
+        $stmt = $pdo->query("SELECT u.user_id, u.full_name, u.email, u.national_id, u.status, g.group_name 
                              FROM users u 
                              LEFT JOIN groups g ON u.group_id = g.group_id 
                              ORDER BY u.user_id DESC");
         $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } else {
-        $res = $conn->query("SELECT u.user_id, u.full_name, u.email, u.status, g.group_name 
+        $res = $conn->query("SELECT u.user_id, u.full_name, u.email, u.national_id, u.status, g.group_name 
                              FROM users u 
                              LEFT JOIN groups g ON u.group_id = g.group_id 
                              ORDER BY u.user_id DESC");
@@ -126,6 +148,10 @@ try {
         <label class="block text-sm font-medium text-gray-700">Email</label>
         <input type="email" name="email" value="<?php echo htmlspecialchars($email ?? ''); ?>" class="mt-1 block w-full border border-gray-300 rounded-lg p-2" required>
       </div>
+      <div>
+  <label class="block text-sm font-medium text-gray-700">National ID</label>
+  <input type="text" name="national_id" value="<?php echo htmlspecialchars($national_id ?? ''); ?>" class="mt-1 block w-full border border-gray-300 rounded-lg p-2" placeholder="Enter National ID" required>
+</div>
 
 <div>
   <label class="block text-sm font-medium text-gray-700">Password</label>
@@ -194,8 +220,11 @@ try {
             <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">#</th>
             <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Full Name</th>
             <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Email</th>
+            <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">National ID</th>
             <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Group</th>
             <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Status</th>
+            <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Action</th>
+
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
@@ -205,8 +234,24 @@ try {
                 <td class="px-4 py-2"><?php echo $index + 1; ?></td>
                 <td class="px-4 py-2"><?php echo htmlspecialchars($u['full_name']); ?></td>
                 <td class="px-4 py-2"><?php echo htmlspecialchars($u['email']); ?></td>
+                <td class="px-4 py-2"><?php echo htmlspecialchars($u['national_id']); ?></td>
                 <td class="px-4 py-2"><?php echo htmlspecialchars($u['group_name']); ?></td>
-                <td class="px-4 py-2 capitalize"><?php echo htmlspecialchars($u['status']); ?></td>
+                <td class="px-4 py-2">
+  <?php if ($u['status'] === 'active'): ?>
+    <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">Active</span>
+  <?php else: ?>
+    <span class="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-semibold">Inactive</span>
+  <?php endif; ?>
+</td>
+
+                <td class="px-4 py-2">
+  <button 
+    onclick="openEditModal(<?php echo $u['user_id']; ?>, '<?php echo $u['full_name']; ?>', '<?php echo $u['status']; ?>')" 
+    class="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600">
+    Edit
+  </button>
+</td>
+
               </tr>
             <?php endforeach; ?>
           <?php else: ?>
@@ -220,5 +265,42 @@ try {
   </div>
 
 </div>
+<!-- Edit Status Modal -->
+<div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
+  <div class="bg-white p-6 rounded-lg shadow-lg w-96">
+    <h2 class="text-xl font-bold mb-4 text-blue-700">Edit User Status</h2>
+
+    <form method="POST" id="editForm">
+      <input type="hidden" name="user_id" id="editUserId">
+
+      <p class="mb-3 text-gray-700">User: <span id="editUserName" class="font-semibold"></span></p>
+
+      <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+      <select name="new_status" id="editStatus" class="w-full border border-gray-300 rounded-lg p-2 mb-4">
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+      </select>
+
+      <div class="flex justify-end space-x-3">
+        <button type="button" onclick="closeEditModal()" class="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500">Cancel</button>
+        <button type="submit" name="update_status" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openEditModal(id, name, status) {
+  document.getElementById('editUserId').value = id;
+  document.getElementById('editUserName').textContent = name;
+  document.getElementById('editStatus').value = status;
+  document.getElementById('editModal').classList.remove('hidden');
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.add('hidden');
+}
+</script>
+
 </body>
 </html>

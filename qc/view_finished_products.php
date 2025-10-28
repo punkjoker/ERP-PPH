@@ -9,9 +9,10 @@ $to_date   = isset($_GET['to_date']) ? $_GET['to_date'] : '';
 $query = "
 SELECT 
     bom.id, 
-    bom.bom_date, 
+    bom.created_at, 
     bom.requested_by, 
     bom.description, 
+    bom.batch_number,
     p.name AS product_name,
     pr.status AS production_status,
     MAX(CASE WHEN qi.qc_status = 'Approved Product' THEN 'Approved Product' END) AS qc_status
@@ -24,20 +25,21 @@ WHERE pr.status = 'Completed'
 
 // ✅ Add date filter if applied
 if ($from_date && $to_date) {
-    $query .= " AND bom.bom_date BETWEEN '$from_date' AND '$to_date'";
+    $query .= " AND bom.created_at BETWEEN '$from_date' AND '$to_date'";
 }
 
 // ✅ Grouping and ordering
 $query .= "
 GROUP BY 
     bom.id, 
-    bom.bom_date, 
+    bom.created_at, 
     bom.requested_by, 
-    bom.description, 
+    bom.description,
+    bom.batch_number, 
     p.name, 
     pr.status
 HAVING qc_status = 'Approved Product'
-ORDER BY bom.bom_date DESC
+ORDER BY bom.created_at DESC
 ";
 
 $result = $conn->query($query);
@@ -45,7 +47,6 @@ if (!$result) {
     die('Query Error: ' . $conn->error);
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -67,50 +68,54 @@ if (!$result) {
       <form method="GET" class="flex space-x-4 mb-6">
         <div>
           <label class="block text-sm font-medium text-gray-700">From Date</label>
-          <input type="date" name="from_date" value="<?php echo $from_date; ?>" class="border p-2 rounded w-full focus:ring-blue-400 focus:border-blue-400">
+          <input type="date" name="from_date" value="<?= $from_date ?>" class="border p-1.5 rounded w-full text-sm focus:ring-blue-400 focus:border-blue-400">
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700">To Date</label>
-          <input type="date" name="to_date" value="<?php echo $to_date; ?>" class="border p-2 rounded w-full focus:ring-blue-400 focus:border-blue-400">
+          <input type="date" name="to_date" value="<?= $to_date ?>" class="border p-1.5 rounded w-full text-sm focus:ring-blue-400 focus:border-blue-400">
         </div>
         <div class="flex items-end">
-          <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">Filter</button>
+          <button type="submit" class="bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 text-sm transition">Filter</button>
         </div>
       </form>
 
       <!-- Table -->
-      <div class="overflow-x-auto">
-        <table class="min-w-full border border-gray-200 text-sm">
+      <div class="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
+        <table class="min-w-full border-collapse text-xs">
           <thead>
-            <tr class="bg-gray-100 text-gray-700 uppercase text-xs">
-              <th class="py-2 px-3 border">Date</th>
-              <th class="py-2 px-3 border">Product Name</th>
-              <th class="py-2 px-3 border">Requested By</th>
-              <th class="py-2 px-3 border">Description</th>
-              <th class="py-2 px-3 border">QC Status</th>
-              <th class="py-2 px-3 border">Actions</th>
+            <tr class="bg-gray-100 text-gray-700 uppercase text-[11px] tracking-wide">
+              <th class="py-1 px-2 border">Date</th>
+              <th class="py-1 px-2 border">Product Name</th>
+              <th class="py-1 px-2 border">Batch #</th>
+              <th class="py-1 px-2 border">Requested By</th>
+              <th class="py-1 px-2 border">Description</th>
+              <th class="py-1 px-2 border">QC Status</th>
+              <th class="py-1 px-2 border text-center">Actions</th>
             </tr>
           </thead>
           <tbody class="text-gray-700">
             <?php if ($result->num_rows > 0): ?>
               <?php while ($row = $result->fetch_assoc()): ?>
-                <tr class="hover:bg-gray-50 transition">
-                  <td class="py-2 px-3 border"><?php echo htmlspecialchars($row['bom_date']); ?></td>
-                  <td class="py-2 px-3 border"><?php echo htmlspecialchars($row['product_name']); ?></td>
-                  <td class="py-2 px-3 border"><?php echo htmlspecialchars($row['requested_by']); ?></td>
-                  <td class="py-2 px-3 border"><?php echo htmlspecialchars($row['description']); ?></td>
-                  <td class="py-2 px-3 border text-green-600 font-semibold">Approved</td>
-                  <td class="py-2 px-3 border space-x-2">
-                    <a href="bom_final.php?id=<?php echo $row['id']; ?>" 
-                       class="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 text-xs">View BOM</a>
-                    <a href="view_finished_product.php?id=<?php echo $row['id']; ?>" 
-                       class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-xs">View Finished Product</a>
+                <tr class="hover:shadow-md hover:bg-gray-50 transition duration-150 border-b border-gray-200">
+                  <td class="py-1 px-2 border-r"><?= date('d M Y, h:i A', strtotime($row['created_at'])) ?></td>
+                  <td class="py-1 px-2 border-r"><?= htmlspecialchars($row['product_name']) ?></td>
+                  <td class="py-1 px-2 border-r"><?= htmlspecialchars($row['batch_number']) ?></td>
+                  <td class="py-1 px-2 border-r"><?= htmlspecialchars($row['requested_by']) ?></td>
+                  <td class="py-1 px-2 border-r truncate max-w-[200px]"><?= htmlspecialchars($row['description']) ?></td>
+                  <td class="py-1 px-2 border-r text-green-600 font-semibold text-xs">Approved</td>
+                  <td class="py-[1px] px-2 text-center">
+                    <div class="flex justify-center gap-1.5">
+                      <a href="bom_final.php?id=<?= $row['id'] ?>" 
+                         class="bg-yellow-500 text-white px-2 py-[2px] rounded hover:bg-yellow-600 text-[11px] shadow-sm">BOM</a>
+                      <a href="view_finished_product.php?id=<?= $row['id'] ?>" 
+                         class="bg-blue-500 text-white px-2 py-[2px] rounded hover:bg-blue-600 text-[11px] shadow-sm">Product</a>
+                    </div>
                   </td>
                 </tr>
               <?php endwhile; ?>
             <?php else: ?>
               <tr>
-                <td colspan="6" class="text-center py-4 text-gray-500">No approved finished products found.</td>
+                <td colspan="7" class="text-center py-3 text-gray-500 text-sm">No approved finished products found.</td>
               </tr>
             <?php endif; ?>
           </tbody>
@@ -121,3 +126,4 @@ if (!$result) {
 
 </body>
 </html>
+

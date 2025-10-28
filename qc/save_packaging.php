@@ -9,7 +9,7 @@ if (!$run_id) {
 
 // ✅ Fetch product details linked to this production run
 $productQuery = $conn->prepare("
-    SELECT p.id AS product_id, p.name AS product_name
+    SELECT p.id AS product_id, p.name AS product_name, b.batch_number, pr.obtained_yield
     FROM production_runs pr
     JOIN bill_of_materials b ON pr.request_id = b.id
     JOIN products p ON b.product_id = p.id
@@ -26,12 +26,14 @@ if ($productResult->num_rows === 0) {
 $productRow = $productResult->fetch_assoc();
 $product_id = $productRow['product_id'];
 $product_name = $productRow['product_name'];
+$batch_number = $productRow['batch_number'];
+$obtained_yield = $productRow['obtained_yield'];
 $productQuery->close();
 
-// ✅ Initialize totals for updating products later
-$total_quantity_used = 0;
+// ✅ Initialize
 $first_pack_size = 0;
 $first_unit = "";
+$first_quantity_used = 0;
 
 // ✅ Loop through each packaging material row
 foreach ($_POST['material_id'] as $i => $mat_id) {
@@ -45,10 +47,11 @@ foreach ($_POST['material_id'] as $i => $mat_id) {
     $remarks = trim($_POST['remarks'][$i] ?? '');
     $total_cost = $qty_used * $unit_cost;
 
-    // Capture the first row pack size and unit for updating product
+    // Capture first row details
     if ($i == 0) {
         $first_pack_size = $pack_size;
         $first_unit = $units;
+        $first_quantity_used = $qty_used;
     }
 
     // ✅ Insert into packaging table
@@ -82,42 +85,31 @@ foreach ($_POST['material_id'] as $i => $mat_id) {
     );
     $stmt->execute();
     $stmt->close();
-
-    // ✅ Add total quantity used for later product update
-    $total_quantity_used += $qty_used;
 }
 
-// ✅ Update product stock quantities
-if ($product_id && $total_quantity_used > 0) {
-    // Fetch existing product data
-    $check = $conn->prepare("SELECT * FROM products WHERE id = ?");
-    $check->bind_param("i", $product_id);
-    $check->execute();
-    $existing = $check->get_result()->fetch_assoc();
-    $check->close();
-
-    if ($existing) {
-        // Calculate new totals
-        $new_remaining = ($existing['remaining_quantity'] ?? 0) + $total_quantity_used;
-        $new_obtained = ($existing['obtained_quantity'] ?? 0) + $total_quantity_used;
-
-        // Update the product record
-        $update = $conn->prepare("
-            UPDATE products 
-            SET 
-                remaining_quantity = ?, 
-                obtained_quantity = ?, 
-                pack_size = ?, 
-                unit = ?
-            WHERE id = ?
-        ");
-        $update->bind_param("dddsi", $new_remaining, $new_obtained, $first_pack_size, $first_unit, $product_id);
-        $update->execute();
-        $update->close();
-    }
+// ✅ Insert into finished_products with the *first* row's quantity_used
+if ($product_name && $batch_number) {
+    $insert = $conn->prepare("
+        INSERT INTO finished_products 
+        (production_run_id, product_id, product_name, batch_number, obtained_yield, unit, pack_size, remaining_size)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ");
+    $insert->bind_param(
+        "iissdsdd",
+        $run_id,
+        $product_id,
+        $product_name,
+        $batch_number,
+        $obtained_yield,
+        $first_unit,
+        $first_pack_size,
+        $first_quantity_used   // ✅ Only from first packaging row
+    );
+    $insert->execute();
+    $insert->close();
 }
 
-// ✅ Redirect to list page with success message
+// ✅ Redirect
 header("Location: packaging_list.php?msg=Packaging+Updated+Successfully");
 exit;
 ?>

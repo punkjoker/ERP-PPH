@@ -19,6 +19,7 @@
         <li><a href="add_material.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-box-open mr-2"></i>Add Raw Material</a></li>
         <li><a href="remove_material.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-minus-circle mr-2"></i>Remove Raw Material</a></li>
         <li><a href="chemicals_in.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-flask mr-2"></i>Chemicals In</a></li>
+ <li><a href="packaging_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-box mr-2"></i>Packaging Request</a></li>
         <li><a href="chemical_list.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-list mr-2"></i>Items List</a></li>
         <li><a href="chemical_inventory.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-vials mr-2"></i>Chemicals Inventory</a></li>
         <li><a href="products_inventory.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-boxes mr-2"></i>Finished Product Inventory</a></li>

@@ -1,110 +1,76 @@
 <?php
 include 'db_con.php';
 
-// Handle adding leave
+// --- Initialize filters to prevent warnings ---
+$search = isset($_GET['search']) ? trim($_GET['search']) : '';
+$selected_year = isset($_GET['year']) ? intval($_GET['year']) : date('Y');
+
+// --- Leave entitlements ---
+$leaveEntitlements = [
+    'Annual' => 21,
+    'Sick' => 30,
+    'Paternity' => 14,
+    'Maternity' => 90
+];
+
+// --- Handle leave submission ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['employee_id'])) {
     $employee_id = intval($_POST['employee_id']);
+    $leave_type = $_POST['leave_type'];
     $description = trim($_POST['description']);
     $start_date  = $_POST['start_date'];
     $end_date    = $_POST['end_date'];
 
-    $stmt = $conn->prepare("INSERT INTO leaves (employee_id, description, start_date, end_date) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("isss", $employee_id, $description, $start_date, $end_date);
+    $stmt = $conn->prepare("INSERT INTO leaves (employee_id, leave_type, description, start_date, end_date) VALUES (?, ?, ?, ?, ?)");
+    $stmt->bind_param("issss", $employee_id, $leave_type, $description, $start_date, $end_date);
     $stmt->execute();
     $stmt->close();
     $success = "Leave added successfully!";
 }
 
-// Fetch employees for dropdown (only active)
-$employees_res = $conn->query("SELECT employee_id, first_name, last_name, date_of_hire FROM employees WHERE status = 'Active' ORDER BY first_name");
-$employees = $employees_res->fetch_all(MYSQLI_ASSOC);
+// Fetch employees
+$employees = $conn->query("SELECT employee_id, first_name, last_name, date_of_hire FROM employees WHERE status = 'Active' ORDER BY first_name")->fetch_all(MYSQLI_ASSOC);
 
-// Selected year filter
-$selected_year = $_GET['year'] ?? date('Y');
-
-// --- Function to calculate leave stats ---
-function calculateLeaveStats($conn, $employee_id, $date_of_hire, $year) {
-    $yearStart = new DateTime("$year-01-01");
-    $yearEnd   = new DateTime("$year-12-31");
-    $hireDate  = new DateTime($date_of_hire);
-
-    // Determine when the employee starts counting leave
-    $startCount = ($hireDate > $yearStart) ? $hireDate : $yearStart;
-    $now = ($year == date('Y')) ? new DateTime() : $yearEnd;
-
-    // Count months worked this year
-    $monthsWorked = 0;
-    $temp = clone $startCount;
-    while ($temp <= $now && $temp <= $yearEnd) {
-        $monthsWorked++;
-        $temp->modify('+1 month');
-    }
-
-    // Leave entitlement (max 21 days)
-    $entitledDays = min($monthsWorked * 1.75, 21);
-
-    // Leave taken in that year
+// --- Function to calculate remaining leave ---
+function getRemainingLeave($conn, $employee_id, $leave_type, $entitlement, $year) {
     $stmt = $conn->prepare("SELECT SUM(DATEDIFF(end_date, start_date) + 1) AS days_taken 
                             FROM leaves 
-                            WHERE employee_id = ? AND YEAR(start_date) = ?");
-    $stmt->bind_param("ii", $employee_id, $year);
+                            WHERE employee_id = ? AND leave_type = ? AND YEAR(start_date) = ?");
+    $stmt->bind_param("isi", $employee_id, $leave_type, $year);
     $stmt->execute();
     $result = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
-    $daysTaken = $result['days_taken'] ?? 0;
-    $remaining = max(21 - $daysTaken, 0);
+    $taken = $result['days_taken'] ?? 0;
+    $remaining = max($entitlement - $taken, 0);
+    return ['taken' => $taken, 'remaining' => $remaining];
+}
+// --- Function to calculate leave stats (entitled, taken, remaining) ---
+function calculateLeaveStats($conn, $employee_id, $date_of_hire, $year) {
+    // Default entitlement (Annual = 21 days)
+    $entitled = 21; 
+
+    // Calculate total leave days taken in the selected year
+    $stmt = $conn->prepare("SELECT SUM(DATEDIFF(end_date, start_date) + 1) AS days_taken
+                            FROM leaves 
+                            WHERE employee_id = ? AND YEAR(start_date) = ?");
+    $stmt->bind_param("ii", $employee_id, $year);
+    $stmt->execute();
+    $res = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    $taken = $res['days_taken'] ?? 0;
+    $remaining = max($entitled - $taken, 0);
 
     return [
-        'entitled' => $entitledDays,
-        'taken' => $daysTaken,
+        'entitled' => $entitled,
+        'taken' => $taken,
         'remaining' => $remaining
     ];
 }
 
-// Filters
-$search = trim($_GET['search'] ?? '');
-$from_date = $_GET['from_date'] ?? '';
-$to_date   = $_GET['to_date'] ?? '';
-
-$query = "SELECT l.*, e.first_name, e.last_name 
-          FROM leaves l 
-          JOIN employees e ON l.employee_id = e.employee_id 
-          WHERE 1=1";
-$params = [];
-$types = '';
-
-if ($search !== '') {
-    $query .= " AND CONCAT(e.first_name, ' ', e.last_name) LIKE ?";
-    $params[] = "%$search%";
-    $types .= 's';
-}
-if ($from_date !== '') {
-    $query .= " AND l.start_date >= ?";
-    $params[] = $from_date;
-    $types .= 's';
-}
-if ($to_date !== '') {
-    $query .= " AND l.end_date <= ?";
-    $params[] = $to_date;
-    $types .= 's';
-}
-if (!empty($selected_year)) {
-    $query .= " AND YEAR(l.start_date) = ?";
-    $params[] = $selected_year;
-    $types .= 'i';
-}
-
-$query .= " ORDER BY l.start_date DESC";
-$stmt = $conn->prepare($query);
-if (!empty($params)) {
-    $stmt->bind_param($types, ...$params);
-}
-$stmt->execute();
-$result = $stmt->get_result();
-$leaves = $result->fetch_all(MYSQLI_ASSOC);
-$stmt->close();
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -125,23 +91,37 @@ $stmt->close();
         </div>
     <?php endif; ?>
 
-    <!-- Add Leave Form -->
     <div class="bg-white shadow rounded-lg p-6 mb-8">
-        <form method="POST" class="space-y-4">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <select name="employee_id" required class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-300">
-                    <option value="">Select Employee</option>
-                    <?php foreach($employees as $emp): ?>
-                        <option value="<?= $emp['employee_id'] ?>"><?= htmlspecialchars($emp['first_name'].' '.$emp['last_name']) ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <input type="text" name="description" placeholder="Leave Description" class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-300" required>
-                <input type="date" name="start_date" class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-300" required>
-                <input type="date" name="end_date" class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-300" required>
-            </div>
-            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition">Add Leave</button>
-        </form>
-    </div>
+    <form method="POST" id="leaveForm" class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Employee -->
+            <select id="employeeSelect" name="employee_id" required class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-300">
+                <option value="">Select Employee</option>
+                <?php foreach($employees as $emp): ?>
+                    <option value="<?= $emp['employee_id'] ?>"><?= htmlspecialchars($emp['first_name'].' '.$emp['last_name']) ?></option>
+                <?php endforeach; ?>
+            </select>
+
+            <!-- Leave Type -->
+            <select id="leaveTypeSelect" name="leave_type" required class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-300">
+                <option value="">Select Leave Type</option>
+                <?php foreach($leaveEntitlements as $type => $days): ?>
+                    <option value="<?= $type ?>"><?= $type ?> (<?= $days ?> days)</option>
+                <?php endforeach; ?>
+            </select>
+
+            <input type="text" name="description" placeholder="Leave Description" required class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-300">
+            <input type="date" name="start_date" required class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-300">
+            <input type="date" name="end_date" required class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-300">
+        </div>
+
+        <!-- Dynamic Remaining Days Display -->
+        <div id="leaveBalance" class="text-blue-700 font-semibold"></div>
+
+        <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition">Add Leave</button>
+    </form>
+</div>
+
 
     <!-- Filter by Year -->
     <div class="bg-white shadow rounded-lg p-4 mb-8 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -224,5 +204,24 @@ $stmt->close();
 </div>
 
 </div>
+<script>
+document.getElementById('leaveTypeSelect').addEventListener('change', updateLeaveBalance);
+document.getElementById('employeeSelect').addEventListener('change', updateLeaveBalance);
+
+function updateLeaveBalance() {
+    const emp = document.getElementById('employeeSelect').value;
+    const type = document.getElementById('leaveTypeSelect').value;
+
+    if (emp && type) {
+        fetch(`get_leave_balance.php?employee_id=${emp}&leave_type=${type}`)
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('leaveBalance').textContent = 
+                `Remaining ${type} Leave: ${data.remaining} days (Taken: ${data.taken})`;
+        });
+    }
+}
+</script>
+
 </body>
 </html>

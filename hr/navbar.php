@@ -23,11 +23,12 @@
         <li><a href="create_staff_account.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-calendar-alt mr-2"></i>Create Staff Account</a></li>
         <li><a href="perfomance_evaluation_list.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-star mr-2"></i>Performance Evaluation</a></li>
         <li><a href="leaves_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-calendar-check mr-2"></i>Leaves request</a></li>
+<li><a href="view_training_requests.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-invoice-dollar mr-2"></i>Training requests</a></li>
         <li><a href="manage_expenses.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-money-bill mr-2"></i>Add Expense</a></li>
         <li><a href="add_lunch_expense.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-utensils mr-2"></i>Lunch Expense</a></li>
         <li><a href="breakfast_expense.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-mug-hot mr-2"></i>Breakfast Expense</a></li>
         <li><a href="record_training.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-chalkboard-user mr-2"></i>Record Training</a></li>
-        <li><a href="packaging_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-box mr-2"></i>Packaging Request</a></li>
+       
         <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-plus mr-2"></i>New Item Request</a></li>
         <li><a href="hr_report.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-lines mr-2"></i>HR Report</a></li>
       </ul>
