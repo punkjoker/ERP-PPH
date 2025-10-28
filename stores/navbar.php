@@ -24,6 +24,7 @@
         <li><a href="chemical_inventory.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-vials mr-2"></i>Chemicals Inventory</a></li>
         <li><a href="products_inventory.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-boxes mr-2"></i>Finished Product Inventory</a></li>
         <li><a href="engineering_products.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-gear mr-2"></i>Engineer Products Inventory</a></li>
+<li><a href="bill_of_material_history.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-invoice mr-2"></i>Chemical usage</a></li>
         <li><a href="stock_in.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-arrow-down mr-2"></i>Stock In</a></li>
         <li><a href="qc_approval.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-thumbs-up mr-2"></i>QC Approval</a></li>
         <li><a href="stock_out.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-arrow-up mr-2"></i>Stock Out</a></li>

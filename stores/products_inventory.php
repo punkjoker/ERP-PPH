@@ -95,7 +95,7 @@ if (!empty($search)) {
                 <td class="py-3 px-4 text-gray-700"><?= htmlspecialchars($row['category']); ?></td>
                 <td class="py-3 px-4 text-gray-700"><?= number_format($row['total_remaining'], 2); ?></td>
                 <td class="py-3 px-4 text-gray-700">
-                  <?= number_format($row['pack_size'], 2) . ' ' . htmlspecialchars($row['unit']); ?>
+                  <?= number_format($row['pack_size'], 2); ?>
                 </td>
                 <td class="py-3 px-4 text-gray-500"><?= htmlspecialchars(date("Y-m-d", strtotime($row['created_at']))); ?></td>
                 <td class="py-3 px-4">

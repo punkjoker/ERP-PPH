@@ -28,15 +28,27 @@ try {
     // fallback to generic name
 }
 
-// Determine greeting
-$hour = date('H');
-if ($hour < 12) {
+// Set correct timezone (adjust as needed)
+date_default_timezone_set('Africa/Nairobi');
+
+// Get current hour in 24-hour format (int)
+$hour = (int) date('G'); // 'G' gives 0–23 (always 24-hour)
+$hour_12 = (int) date('g'); // 12-hour format (1–12)
+$ampm = strtolower(date('a')); // 'am' or 'pm'
+
+// Decide greeting and emoji
+if (($ampm === 'am' && $hour_12 < 12) || ($hour < 12)) {
     $greeting = "Good morning";
-} elseif ($hour < 18) {
+    $emoji = "☀️";
+} elseif (($ampm === 'pm' && $hour_12 < 6) || ($hour < 18)) {
     $greeting = "Good afternoon";
+    $emoji = "🌤️";
 } else {
     $greeting = "Good evening";
+    $emoji = "🌙";
 }
+
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -52,7 +64,11 @@ if ($hour < 12) {
 
   <div class="ml-64 p-10">
     <!-- Greeting -->
-    <h1 class="text-3xl font-bold text-blue-700 mb-2"><?php echo "$greeting, $full_name"; ?>!</h1>
+<h1 class="text-3xl font-bold text-blue-700 mb-2 flex items-center gap-2">
+  <span><?= $emoji ?></span>
+  <?= "$greeting, $full_name!"; ?>
+</h1>
+
     <p class="text-gray-600 mb-6">Welcome to your dashboard</p>
 
     <!-- Dashboard Cards -->
