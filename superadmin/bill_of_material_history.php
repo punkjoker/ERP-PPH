@@ -46,6 +46,7 @@ $query = "
         b.description AS bom_description,
         b.requested_by,
         b.issued_by,
+        b.batch_number,
         b.issue_date,
         bi.quantity_requested,
         bi.total_cost AS used_cost
@@ -138,6 +139,7 @@ while ($row = $result->fetch_assoc()) {
         <th class="py-2 px-3 border">#</th>
         <th class="py-2 px-3 border">Chemical Name</th>
         <th class="py-2 px-3 border">Lot No</th>
+        <th class="py-2 px-3 border">Batch No</th>
         <th class="py-2 px-3 border">Original Qty</th>
         <th class="py-2 px-3 border">Used Qty</th>
         <th class="py-2 px-3 border">Remaining Qty</th>
@@ -156,6 +158,7 @@ while ($row = $result->fetch_assoc()) {
             <td class="border px-3 py-1 text-center text-gray-700"><?php echo $i++; ?></td>
             <td class="border px-3 py-1 text-gray-800"><?php echo htmlspecialchars($r['chemical_name']); ?></td>
             <td class="border px-3 py-1 text-gray-700"><?php echo htmlspecialchars($r['rm_lot_no']); ?></td>
+            <td class="border px-3 py-1 text-gray-700"><?php echo htmlspecialchars($r['batch_number']); ?></td>
             <td class="border px-3 py-1 text-right text-gray-700"><?php echo number_format($r['std_quantity'], 2); ?></td>
             <td class="border px-3 py-1 text-right text-red-600"><?php echo number_format($r['quantity_requested'], 2); ?></td>
             <td class="border px-3 py-1 text-right text-green-700 font-semibold"><?php echo number_format($r['remaining_quantity'], 2); ?></td>

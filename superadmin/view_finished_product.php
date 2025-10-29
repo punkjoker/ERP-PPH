@@ -261,8 +261,8 @@ $total_production_cost = $total_cost + $total_packaging_cost;
             <thead class="bg-gray-100">
                 <tr>
                     <th class="border px-3 py-2">Item Name</th>
-                    <th class="border px-3 py-2">Units</th>
                     <th class="border px-3 py-2">Quantity Packed</th>
+                    <th class="border px-3 py-2">Units packed</th>
                     <th class="border px-3 py-2">Cost per Unit</th>
                     <th class="border px-3 py-2">Total Cost</th>
                     <th class="border px-3 py-2">Status</th>

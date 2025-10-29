@@ -103,45 +103,163 @@ $pack_stmt->close();
   <title>Update Packaging - <?= htmlspecialchars($production['product_name']) ?></title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-  // 🧮 Calculate packages and unpackaged quantity
-  function calculatePackages(row) {
-    const yieldQty = parseFloat(document.getElementById('obtainedYield').value) || 0;
-    const packSize = parseFloat(row.querySelector('.pack-size').value) || 0;
-    const unitCost = parseFloat(row.querySelector('.unit-cost').value) || 0;
+/*
+  Behavior assumptions:
+  - quantity-to-pack input is the weight (kg) the user wants to pack in that row.
+  - pack-size is the size of one pack (kg). Example: pack-size = 20, qty-to-pack = 100 -> 5 full packs.
+  - unit-cost must be the cost **per unit-of-weight** (e.g. per kg) OR per pack. See note below.
+*/
 
-    if (packSize > 0) {
-      const fullPacks = Math.floor(yieldQty / packSize);
-      const unpackaged = yieldQty % packSize;
-      const totalCost = (fullPacks * unitCost).toFixed(2);
+document.addEventListener('DOMContentLoaded', () => {
+  // Cache elements
+  window.totalYieldInput = document.getElementById('obtainedYield');
+  window.container = document.getElementById('materials-container');
 
-      // Update fields
-      row.querySelector('.quantity-used').value = fullPacks;
-      row.querySelector('.unpackaged-qty').value = unpackaged.toFixed(2);
-      row.querySelector('.total-cost').value = totalCost;
+  // initialize display
+  updateRemainingYield();
+
+  // Event delegation: handle input changes in any row
+  container.addEventListener('input', (ev) => {
+    const el = ev.target;
+    const row = el.closest('.material-row');
+    if (!row) return;
+
+    // if material changed, fill unit cost / available
+    if (el.tagName === 'SELECT' && el.name && el.name.indexOf('material_id') !== -1) {
+      fillMaterialData(el);
+      return;
     }
+
+    // When qty or pack size or unit-cost changes, recalc that row and update remaining total
+    if (el.classList.contains('pack-size') ||
+        el.classList.contains('quantity-to-pack') ||
+        el.classList.contains('unit-cost')) {
+      calculatePackages(row);
+      updateRemainingYield();
+    }
+  });
+});
+
+// Calculate and update fields for a row
+function calculatePackages(row) {
+  const packSize = parseFloat(row.querySelector('.pack-size').value) || 0;
+  const qtyToPack = parseFloat(row.querySelector('.quantity-to-pack').value) || 0;
+  const unitCost = parseFloat(row.querySelector('.unit-cost').value) || 0;
+
+  // Defensive: if user typed negative, reset
+  if (qtyToPack < 0) {
+    row.querySelector('.quantity-to-pack').value = '';
+    return;
   }
 
-  // ➕ Add new material row
-  function addMaterialRow() {
-    const template = document.querySelector('.material-row');
-    const clone = template.cloneNode(true);
-    clone.querySelectorAll('input').forEach(i => i.value = '');
-    clone.querySelectorAll('select').forEach(s => s.selectedIndex = 0);
-    document.getElementById('materials-container').appendChild(clone);
+  // Check against remaining BEFORE writing — compute new totalPacked excluding this row,
+  // so user can change this row up and down without immediately getting blocked.
+  const totalYield = parseFloat(totalYieldInput.value) || 0;
+  let totalPackedExcludingThis = 0;
+  document.querySelectorAll('.material-row').forEach(r => {
+    if (r === row) return;
+    const v = parseFloat(r.querySelector('.quantity-to-pack').value) || 0;
+    totalPackedExcludingThis += v;
+  });
+
+  if (totalPackedExcludingThis + qtyToPack > totalYield + 0.0001) {
+    // overpack — don't allow
+    const maxAllowed = Math.max(0, totalYield - totalPackedExcludingThis);
+    alert("❌ Cannot pack that much. Remaining available: " + maxAllowed.toFixed(2) + " (kg).");
+    // clamp to maxAllowed so user can continue (optional), or clear input:
+    row.querySelector('.quantity-to-pack').value = maxAllowed > 0 ? maxAllowed.toFixed(2) : '';
+    // recalc with clamped value
+    const clamped = parseFloat(row.querySelector('.quantity-to-pack').value) || 0;
+    applyRowCalculations(row, packSize, clamped, unitCost);
+    updateRemainingYield();
+    return;
   }
 
-  // 🧾 Auto-fill unit cost & available stock
-  function fillMaterialData(select) {
-  const option = select.options[select.selectedIndex];
-  const row = select.closest('.material-row');
-  row.querySelector('.unit-cost').value = option.dataset.cost;
-  row.querySelector('.available-stock').value = option.dataset.qty;
-  row.querySelector('.pack-size').value = option.dataset.packsize || '';
-  
-  calculatePackages(row);
+  // ok — apply calculations
+  applyRowCalculations(row, packSize, qtyToPack, unitCost);
 }
 
+// Helper: fill row fields based on values
+function applyRowCalculations(row, packSize, qtyToPack, unitCost) {
+  // number of full packs
+  const fullPacks = packSize > 0 ? Math.floor(qtyToPack / packSize) : 0;
+  // leftover inside this row that doesn't make a full pack
+  const unpackaged = packSize > 0 ? (qtyToPack - (fullPacks * packSize)) : 0;
+  // total cost: NOTE (see bottom): we treat unitCost as cost per unit-weight (kg). Multiply by qtyToPack.
+  const totalCost = (qtyToPack * unitCost);
+
+  // write values
+  const qUsedEl = row.querySelector('.quantity-used');
+  const unpackEl = row.querySelector('.unpackaged-qty');
+  const totalCostEl = row.querySelector('.total-cost');
+
+  if (qUsedEl) qUsedEl.value = fullPacks;
+  if (unpackEl) unpackEl.value = unpackaged.toFixed(2);
+  if (totalCostEl) totalCostEl.value = totalCost.toFixed(2);
+}
+
+// Sum all quantity_to_pack rows and update remaining display
+function updateRemainingYield() {
+  const totalYield = parseFloat(totalYieldInput.value) || 0;
+  let totalPacked = 0;
+  document.querySelectorAll('.material-row').forEach(row => {
+    const v = parseFloat(row.querySelector('.quantity-to-pack').value) || 0;
+    totalPacked += v;
+  });
+
+  let remaining = totalYield - totalPacked;
+  if (remaining < 0) remaining = 0;
+
+  // display
+  const disp = document.getElementById('remainingYieldDisplay');
+  if (disp) disp.textContent = remaining.toFixed(2);
+
+  // optionally disable Add Material when none remains:
+  const addBtn = document.querySelector('button[onclick="addMaterialRow()"]');
+  if (addBtn) addBtn.disabled = remaining <= 0;
+  if (addBtn) addBtn.classList.toggle('opacity-50', remaining <= 0);
+}
+
+// Add a new clean row (cloning template row)
+function addMaterialRow() {
+  const container = document.getElementById('materials-container');
+  const template = document.querySelector('.material-row');
+  if (!template) return;
+  const clone = template.cloneNode(true);
+
+  // Clear inputs/selects in clone
+  clone.querySelectorAll('input').forEach(i => i.value = '');
+  clone.querySelectorAll('select').forEach(s => s.selectedIndex = 0);
+
+  container.appendChild(clone);
+
+  // Focus the material select in the new row
+  const newSelect = clone.querySelector('select[name="material_id[]"]');
+  if (newSelect) newSelect.focus();
+
+  updateRemainingYield();
+}
+
+// Fill material data (unit cost & available)
+function fillMaterialData(select) {
+  const option = select.options[select.selectedIndex];
+  const row = select.closest('.material-row');
+  if (!option || !row) return;
+  const cost = parseFloat(option.dataset.cost) || 0;
+  const qty = parseFloat(option.dataset.qty) || 0;
+
+  const unitCostEl = row.querySelector('.unit-cost');
+  const availEl = row.querySelector('.available-stock');
+
+  if (unitCostEl) unitCostEl.value = cost.toFixed(2);
+  if (availEl) availEl.placeholder = qty ? ('Available: ' + qty) : '';
+
+  // If qty-to-pack already has value, recalc
+  calculatePackages(row);
+  updateRemainingYield();
+}
 </script>
+
 </head>
 
 <body class="bg-gray-100 font-sans">
@@ -350,69 +468,88 @@ if (empty($production['expected_yield'])) {
       <?php endif; ?>
     </div>
 
-  <!-- ✅ Packaging Form -->
-  <form method="POST" action="save_packaging.php">
-    <input type="hidden" name="production_run_id" value="<?= $production['id']; ?>">
+ <!-- ✅ Packaging Form -->
+<form method="POST" action="save_packaging.php">
+  <input type="hidden" name="production_run_id" value="<?= $production['id']; ?>">
 
-    <div id="materials-container">
-      <div class="material-row grid grid-cols-10 gap-2 bg-white p-3 mb-2 rounded shadow-sm border items-center">
-        <div class="col-span-3">
-          <label class="text-sm font-semibold text-gray-700">Material</label>
-          <select name="material_id[]" class="border p-2 rounded w-full" onchange="fillMaterialData(this)">
-            <option value="">-- Select Material --</option>
-            <?php foreach ($materials as $m): ?>
-              <option value="<?= $m['id']; ?>" 
-    data-cost="<?= $m['cost']; ?>"
-    data-qty="<?= $m['quantity']; ?>">
-  <?= htmlspecialchars($m['material_name']); ?>
-</option>
-
-
-            <?php endforeach; ?>
-          </select>
-        </div>
-
-        <div>
-          <label class="text-sm font-semibold text-gray-700">Pack Size (Kg/L)</label>
-          <input type="number" step="0.01" name="pack_size[]" class="pack-size border p-2 rounded w-full" 
-                 oninput="calculatePackages(this.closest('.material-row'))">
-        </div>
-<!-- Unit -->
-   <div>
-  <label class="text-sm font-semibold text-gray-700">Unit</label>
-  <input type="text" name="unit[]" placeholder="e.g. Kg, L, pcs" 
-         class="border p-2 rounded w-full" />
-</div>
-
-
-        <div>
-          <label class="text-sm font-semibold text-gray-700">Available</label>
-          <input type="number" class="available-stock border p-2 rounded w-full bg-gray-100" readonly>
-        </div>
-
-        <div>
-          <label class="text-sm font-semibold text-gray-700">Qty Used</label>
-          <input type="number" name="quantity_used[]" class="quantity-used border p-2 rounded w-full bg-gray-50" readonly>
-        </div>
-
-        <div>
-          <label class="text-sm font-semibold text-gray-700">Unit Cost</label>
-          <input type="number" step="0.01" name="cost_per_unit[]" class="unit-cost border p-2 rounded w-full" 
-                 oninput="calculatePackages(this.closest('.material-row'))">
-        </div>
-
-        <div>
-          <label class="text-sm font-semibold text-gray-700">Total Cost</label>
-          <input type="number" step="0.01" name="total_cost[]" class="total-cost border p-2 rounded w-full bg-gray-100" readonly>
-        </div>
-
-        <div>
-  <label class="text-sm font-semibold text-gray-700">Unpackaged Qty</label>
-  <input type="number" name="unpackaged_qty[]" class="unpackaged-qty border p-2 rounded w-full bg-gray-50" readonly>
-</div>
-
+  <div id="materials-container">
+    <div class="material-row grid grid-cols-12 gap-2 bg-white p-3 mb-2 rounded shadow-sm border items-center">
+      
+      <!-- Material -->
+      <div class="col-span-3">
+        <label class="text-sm font-semibold text-gray-700">Material</label>
+        <select name="material_id[]" class="border p-2 rounded w-full" onchange="fillMaterialData(this)">
+          <option value="">-- Select Material --</option>
+          <?php foreach ($materials as $m): ?>
+            <option value="<?= $m['id']; ?>" 
+                    data-cost="<?= $m['cost']; ?>"
+                    data-qty="<?= $m['quantity']; ?>">
+              <?= htmlspecialchars($m['material_name']); ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
       </div>
+
+      <!-- Pack Size -->
+      <div class="col-span-1">
+        <label class="text-sm font-semibold text-gray-700">Pack Size</label>
+        <input type="number" step="0.01" name="pack_size[]" 
+               class="pack-size border p-2 rounded w-full"
+               oninput="calculatePackages(this.closest('.material-row'))">
+      </div>
+
+      <!-- Quantity to Pack -->
+      <div class="col-span-1">
+        <label class="text-sm font-semibold text-gray-700">Qty to Pack</label>
+        <input type="number" step="0.01" name="quantity_to_pack[]" 
+               class="quantity-to-pack border p-2 rounded w-full"
+               oninput="calculatePackages(this.closest('.material-row'))">
+      </div>
+
+      <!-- Unit -->
+      <div class="col-span-1">
+        <label class="text-sm font-semibold text-gray-700">Unit</label>
+        <input type="text" name="unit[]" placeholder="Kg/L/Pcs"
+               class="border p-2 rounded w-full">
+      </div>
+
+      <!-- Available -->
+      <div class="col-span-1">
+        <label class="text-sm font-semibold text-gray-700">Available</label>
+        <input type="number" class="available-stock border p-2 rounded w-full bg-gray-100" readonly>
+      </div>
+
+      <!-- Qty Used -->
+      <div class="col-span-1">
+        <label class="text-sm font-semibold text-gray-700">Qty Used</label>
+        <input type="number" name="quantity_used[]" 
+               class="quantity-used border p-2 rounded w-full bg-gray-50" readonly>
+      </div>
+
+      <!-- Unit Cost -->
+      <div class="col-span-1">
+        <label class="text-sm font-semibold text-gray-700">Unit Cost</label>
+        <input type="number" step="0.01" name="cost_per_unit[]" 
+               class="unit-cost border p-2 rounded w-full"
+               oninput="calculatePackages(this.closest('.material-row'))">
+      </div>
+
+      <!-- Total Cost -->
+      <div class="col-span-1">
+        <label class="text-sm font-semibold text-gray-700">Total Cost</label>
+        <input type="number" step="0.01" name="total_cost[]" 
+               class="total-cost border p-2 rounded w-full bg-gray-100" readonly>
+      </div>
+
+      <!-- Unpackaged Qty -->
+      <div class="col-span-2">
+        <label class="text-sm font-semibold text-gray-700">Unpackaged Qty</label>
+        <input type="number" name="unpackaged_qty[]" 
+               class="unpackaged-qty border p-2 rounded w-full bg-gray-50" readonly>
+      </div>
+
     </div>
+  </div>
 
     <button type="button" onclick="addMaterialRow()" 
             class="mt-3 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition">
