@@ -44,6 +44,12 @@ $linked_orders = $stmt2->get_result();
         <p><strong>Delivery Date:</strong> <?= htmlspecialchars($delivery['delivery_date']) ?></p>
         <p><strong>Status:</strong> <?= htmlspecialchars($delivery['status']) ?></p>
     </div>
+<div class="mb-4">
+    <a href="download_delivery_pdf.php?id=<?= $delivery_id ?>" 
+       class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded inline-block">
+        📥 Download PDF
+    </a>
+</div>
 
     <!-- Linked Delivery Orders -->
     <div class="bg-white shadow-lg rounded-2xl p-6">

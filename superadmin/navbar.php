@@ -32,14 +32,17 @@
         <li><a href="view_employees.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-users mr-2"></i>View Employees</a></li>
         <li><a href="employee_information.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-id-card mr-2"></i>Employees Information</a></li>
         <li><a href="create_staff_account.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-calendar-alt mr-2"></i>Create Staff Account</a></li>
-        <li><a href="perfomance_evaluation_list.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-star mr-2"></i>Performance Evaluation</a></li>
+        
         <li><a href="leaves_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-calendar-check mr-2"></i>Leaves request</a></li>
         <li><a href="view_training_requests.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-invoice-dollar mr-2"></i>Training requests</a></li>
         <li><a href="manage_expenses.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-money-bill mr-2"></i>Add Expense</a></li>
         <li><a href="add_lunch_expense.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-utensils mr-2"></i>Lunch Expense</a></li>
         <li><a href="breakfast_expense.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-mug-hot mr-2"></i>Breakfast Expense</a></li>
         <li><a href="record_training.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-chalkboard-user mr-2"></i>Record Training</a></li>
+        <li><a href="all_daily_reports.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-chalkboard-teacher mr-2"></i>Daily Reports</a></li>
         <li><a href="packaging_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-box mr-2"></i>Packaging Request</a></li>
+        <li><a href="view_all_evaluations.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-alt mr-2"></i>View All Evaluations</a></li>
+        <li><a href="employee_appraisal.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-alt mr-2"></i>Employee Appraisal</a></li>
         <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-plus mr-2"></i>New Item Request</a></li>
         <li><a href="hr_report.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-lines mr-2"></i>HR Report</a></li>
       </ul>
@@ -140,6 +143,12 @@
         <li><a href="payroll_details.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-invoice-dollar mr-2"></i>Payroll details</a></li>
         <li><a href="payroll_deductions.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-minus mr-2"></i>Payroll Deductions</a></li>
         <li><a href="Payroll_list.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-wallet mr-2"></i>Process Payroll</a></li>
+      </ul>
+    </div>
+    <div>
+      <h3 class="text-blue-700 font-semibold uppercase">Store B</h3>
+      <ul class="ml-4 space-y-2 text-sm">
+        <li><a href="store_b_chemicals_in.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-alt mr-2"></i>Store B chemicals In</a></li>
       </ul>
     </div>
     <!-- Reports -->
