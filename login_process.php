@@ -42,6 +42,7 @@ if (password_verify($password, $user['password'])) {
         case 9: header("Location: staff/dashboard.php"); exit;
         case 10: header("Location: accounts/dashboard.php"); exit;
         case 11: header("Location: sales/dashboard.php"); exit;
+        case 12: header("Location: litein/dashboard.php"); exit;
         default:
             echo "<script>alert('No dashboard found for this user group.'); window.history.back();</script>";
             exit;

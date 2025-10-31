@@ -143,12 +143,25 @@
         <li><a href="payroll_details.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-invoice-dollar mr-2"></i>Payroll details</a></li>
         <li><a href="payroll_deductions.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-minus mr-2"></i>Payroll Deductions</a></li>
         <li><a href="Payroll_list.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-wallet mr-2"></i>Process Payroll</a></li>
+        <li><a href="all_deductions.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-chart-pie mr-2"></i>Deduction Reports</a></li>
       </ul>
     </div>
     <div>
       <h3 class="text-blue-700 font-semibold uppercase">Store B</h3>
       <ul class="ml-4 space-y-2 text-sm">
         <li><a href="store_b_chemicals_in.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-alt mr-2"></i>Store B chemicals In</a></li>
+        <li><a href="store_b_chemicals_inventory.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-vials mr-2"></i>Store B Chemical Inventory</a></li>
+        <li><a href="store_b_engineering_products_in.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-alt mr-2"></i>Store B Engineering Products In</a></li>
+        <li><a href="store_b_engineering_products_inventory.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-boxes mr-2"></i>Store B Engineering Products Inventory</a></li>
+        <li><a href="store_b_finished_products_in.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-alt mr-2"></i>Store B Finished Products In</a></li>
+        <li><a href="store_b_finished_products_inventory.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-boxes mr-2"></i>Store B Finished Products Inventory</a></li>
+        <li><a href="create_store_b_order.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-alt mr-2"></i>Store B create Order</a></li>
+        <li><a href="all_orders_store_b.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-clipboard-list mr-2"></i>Store B All Orders</a></li>
+        <li><a href="store_b_order_items.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-box mr-2"></i>Store B View Order Items</a></li>
+        <li><a href="store_b_order_deliveries.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-truck mr-2"></i>Store B Order Deliveries</a></li>
+        <li><a href="store_b_delivery_details.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-info-circle mr-2"></i>Store B Delivery Details</a></li>
+        <li><a href="store_b_reports.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-chart-pie mr-2"></i>Store B Reports</a></li>
+
       </ul>
     </div>
     <!-- Reports -->
@@ -167,4 +180,21 @@
       <i class="fa-solid fa-right-from-bracket mr-2"></i>Logout
     </a>
   </div>
+  <script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const sidebar = document.querySelector(".overflow-y-auto");
+
+    // Restore previous scroll position
+    const savedScroll = localStorage.getItem("sidebar-scroll");
+    if (savedScroll) {
+      sidebar.scrollTop = parseInt(savedScroll, 10);
+    }
+
+    // Save scroll position whenever user scrolls
+    sidebar.addEventListener("scroll", function () {
+      localStorage.setItem("sidebar-scroll", sidebar.scrollTop);
+    });
+  });
+</script>
+
 </div>
