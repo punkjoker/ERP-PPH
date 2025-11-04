@@ -33,6 +33,10 @@ include 'navbar.php';
     <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg mt-5">
       Filter
     </button>
+<a href="download_all_delivery_order_items.php?start_date=<?= urlencode($_GET['start_date'] ?? '') ?>&end_date=<?= urlencode($_GET['end_date'] ?? '') ?>"
+   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow">
+   ⬇ Download Report
+</a>
 
     <a href="all_delivery_order_items.php" class="ml-2 text-blue-600 mt-5 underline">Reset</a>
   </form>

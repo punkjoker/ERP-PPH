@@ -116,6 +116,12 @@ if ($filter_user && $filter_type) {
 
 <div class="ml-64 p-6 max-w-7xl mx-auto">
     <h1 class="text-3xl font-bold mb-6 text-blue-700">All Leave Requests</h1>
+<div class="flex justify-end mb-4">
+  <a href="download_leaves_requests.php?<?= http_build_query($_GET) ?>"
+     class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+     ⬇️ Download Leave Requests
+  </a>
+</div>
 
     <!-- 🔹 FILTER SECTION -->
     <form method="GET" class="bg-white shadow rounded-lg p-4 mb-6 grid grid-cols-1 md:grid-cols-5 gap-4 items-end">

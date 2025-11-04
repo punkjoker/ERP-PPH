@@ -103,6 +103,14 @@ if (!$result) {
         <div class="flex items-end">
           <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">Filter</button>
         </div>
+        <a 
+  href="download_qc_reviews.php?from_date=<?= urlencode($from_date) ?>&to_date=<?= urlencode($to_date) ?>"
+  class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 ml-2"
+  target="_blank"
+>
+  Download PDF
+</a>
+
       </form>
 
       <!-- Table -->

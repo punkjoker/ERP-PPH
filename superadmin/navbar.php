@@ -95,7 +95,7 @@
         <li><a href="stock_out.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-arrow-up mr-2"></i>Stock Out</a></li>
         <li><a href="production_requests.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-list-ul mr-2"></i>Production Requests</a></li>
         <li><a href="packaging_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-box mr-2"></i>Packaging Request</a></li>
-        <li><a href="view_inventory.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-warehouse mr-2"></i>View Inventory</a></li>
+       
         <li><a href="bill_of_material_history.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-scroll mr-2"></i>View Bill Of Material</a></li>
         <li><a href="order_deliveries.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-truck mr-2"></i>Create Delivery</a></li>
         <li><a href="create_order_delivery.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-pen mr-2"></i>Create Order</a></li>

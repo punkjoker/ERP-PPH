@@ -57,14 +57,30 @@ $stmt->close();
 
     <div class="p-6 ml-64">
         <div class="flex justify-between items-center mb-6">
-            <div>
-                <h1 class="text-3xl font-bold text-gray-800"><?= htmlspecialchars($chem_details['chemical_name']) ?></h1>
-                <p class="text-gray-600 text-sm">Code: <span class="font-semibold"><?= htmlspecialchars($chemical_code) ?></span></p>
-                <p class="text-gray-600 text-sm">Category: <?= htmlspecialchars($chem_details['category']) ?></p>
-                <p class="text-gray-600 text-sm">Description: <?= htmlspecialchars($chem_details['description']) ?></p>
-            </div>
-            <a href="chemical_inventory.php" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow">← Back to List</a>
-        </div>
+    <div>
+        <h1 class="text-3xl font-bold text-gray-800"><?= htmlspecialchars($chem_details['chemical_name']) ?></h1>
+        <p class="text-gray-600 text-sm">Code: <span class="font-semibold"><?= htmlspecialchars($chemical_code) ?></span></p>
+        <p class="text-gray-600 text-sm">Category: <?= htmlspecialchars($chem_details['category']) ?></p>
+        <p class="text-gray-600 text-sm">Description: <?= htmlspecialchars($chem_details['description']) ?></p>
+    </div>
+
+    <div class="flex gap-3">
+    <!-- Back button -->
+    <a href="chemical_inventory.php" 
+       class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition">
+       ← Back to List
+    </a>
+
+    <!-- ✅ Fixed Download button -->
+    <a href="download_all_lots.php?code=<?= urlencode($chemical_code) ?>" 
+       class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow transition"
+       target="_blank">
+       ⬇ Download Lots
+    </a>
+</div>
+
+</div>
+
 
         <div class="bg-white shadow-lg rounded-lg overflow-hidden">
     <h2 class="text-xl font-semibold mb-3 text-blue-700 px-4 pt-4">Lot Details (FIFO)</h2>

@@ -77,6 +77,11 @@ if (!$result) {
         <div class="flex items-end">
           <button type="submit" class="bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 text-sm transition">Filter</button>
         </div>
+        <a href="download_finished_product_out.php?from_date=<?= $from_date ?>&to_date=<?= $to_date ?>"
+   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow-sm">
+   Download List
+</a>
+
       </form>
 
       <!-- Table -->

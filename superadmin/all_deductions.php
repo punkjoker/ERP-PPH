@@ -88,6 +88,12 @@ $totalsDeductions = array_fill_keys(array_keys($deductionsList), 0);
     <div>
         <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Filter</button>
     </div>
+    <!-- ✅ Download Button -->
+        <a href="download_all_deductions.php?month=<?= urlencode($month) ?>&year=<?= urlencode($year) ?>"
+           class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow flex items-center gap-1"
+           title="Download Deductions Report (PDF)">
+            📥 Download PDF
+        </a>
 </form>
 
 <!-- Payroll Table -->
