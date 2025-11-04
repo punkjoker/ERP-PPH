@@ -8,6 +8,8 @@ $sql = "SELECT l.*, u.full_name
         FROM leaves l
         JOIN users u ON l.user_id = u.user_id
         ORDER BY l.start_date DESC";
+
+
 $res = $conn->query($sql);
 while ($row = $res->fetch_assoc()) {
     $leaves[] = $row;

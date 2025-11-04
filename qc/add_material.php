@@ -3,8 +3,10 @@ session_start();
 require 'db_con.php';
 
 // ✅ Add missing columns if they don’t exist
+// ✅ Add missing columns if they don’t exist
 $conn->query("ALTER TABLE materials ADD COLUMN IF NOT EXISTS po_number VARCHAR(100) NULL");
 $conn->query("ALTER TABLE materials ADD COLUMN IF NOT EXISTS unit VARCHAR(50) NULL");
+$conn->query("ALTER TABLE materials ADD COLUMN IF NOT EXISTS material_code VARCHAR(100) NULL");
 
 // ✅ Handle Add Material
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_material'])) {
@@ -13,13 +15,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_material'])) {
     $quantity = floatval($_POST['quantity']);
     $cost = floatval($_POST['cost']);
     $unit = trim($_POST['unit']);
+    $material_code = trim($_POST['chemical_code']);
 
     if ($material_name && $po_number && $quantity > 0 && $cost > 0) {
-        $stmt = $conn->prepare("INSERT INTO materials (material_name, po_number, quantity, cost, unit) VALUES (?, ?, ?, ?, ?)");
-        $stmt->bind_param("ssdss", $material_name, $po_number, $quantity, $cost, $unit);
-        $stmt->execute();
+
+        // ✅ Check if material_code already exists
+        $check = $conn->prepare("SELECT id, quantity, cost FROM materials WHERE material_code = ?");
+        $check->bind_param("s", $material_code);
+        $check->execute();
+        $result = $check->get_result();
+
+        if ($result->num_rows > 0) {
+            // ✅ Update existing record
+            $existing = $result->fetch_assoc();
+            $newQty = $existing['quantity'] + $quantity;
+
+            // ✅ Update quantity, and replace cost if different
+            if ($existing['cost'] != $cost) {
+                $stmt = $conn->prepare("UPDATE materials SET quantity = ?, cost = ?, po_number = ?, unit = ? WHERE material_code = ?");
+                $stmt->bind_param("ddsss", $newQty, $cost, $po_number, $unit, $material_code);
+            } else {
+                $stmt = $conn->prepare("UPDATE materials SET quantity = ?, po_number = ?, unit = ? WHERE material_code = ?");
+                $stmt->bind_param("dsss", $newQty, $po_number, $unit, $material_code);
+            }
+            $stmt->execute();
+        } else {
+            // ✅ Insert new record
+            $stmt = $conn->prepare("INSERT INTO materials (material_name, material_code, po_number, quantity, cost, unit) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->bind_param("sssdds", $material_name, $material_code, $po_number, $quantity, $cost, $unit);
+            $stmt->execute();
+        }
     }
 }
+
 
 // ✅ Handle Edit Material
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_material'])) {
@@ -71,64 +99,74 @@ $materials = $conn->query($query);
 <div class="max-w-6xl ml-64 mx-auto mt-24 p-6 bg-white rounded-xl shadow-lg">
   <h2 class="text-2xl font-bold text-blue-700 mb-6 text-center">Materials In</h2>
 
-  <!-- ✅ Add Material Form -->
- <!-- ✅ Add Material Form -->
-<form method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-  
-  <!-- ✅ Material Name (First Field) -->
-  <div>
-    <label class="block text-sm font-medium text-gray-700">Material Name</label>
-    <input list="material_list" name="material_name" id="material_name"
-           class="w-full border rounded px-3 py-2"
-           placeholder="Type or select material name" required>
-    <datalist id="material_list">
-  <?php
-    // ✅ Pull from chemical_names where main_category is Packaging Materials
-    $matList = $conn->query("
-      SELECT DISTINCT chemical_name 
-      FROM chemical_names 
-      WHERE main_category = 'Packaging Materials'
-      ORDER BY chemical_name ASC
-    ");
-    while ($m = $matList->fetch_assoc()):
-  ?>
-    <option value="<?= htmlspecialchars($m['chemical_name']) ?>"></option>
-  <?php endwhile; ?>
-</datalist>
+  <!-- ✅ START FORM -->
+  <form method="POST">
 
-  </div>
+    <!-- ✅ Material Name + Material Code -->
+    <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Material Name</label>
+        <input list="material_list" name="material_name" id="material_name"
+               class="w-full border rounded px-3 py-2"
+               placeholder="Type or select material name" required>
+        <datalist id="material_list">
+          <?php
+            $matList = $conn->query("
+              SELECT DISTINCT chemical_name 
+              FROM chemical_names 
+              WHERE main_category = 'Packaging Materials'
+              ORDER BY chemical_name ASC
+            ");
+            while ($m = $matList->fetch_assoc()):
+          ?>
+            <option value="<?= htmlspecialchars($m['chemical_name']) ?>"></option>
+          <?php endwhile; ?>
+        </datalist>
+      </div>
 
-  <!-- ✅ PO Number (now a free text box) -->
-  <div>
-    <label class="block text-sm font-medium text-gray-700">PO Number</label>
-    <input type="text" name="po_number" id="po_number"
-           class="w-full border rounded px-3 py-2"
-           placeholder="Enter P.O number manually" required>
-  </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Material Code</label>
+        <input type="text" name="chemical_code" id="chemical_code"
+               class="w-full border rounded px-3 py-2 bg-gray-100"
+               placeholder="Auto-filled after selecting material" readonly>
+      </div>
+    </div>
 
-  <div>
-    <label class="block text-sm font-medium text-gray-700">Unit</label>
-    <input type="text" name="unit" id="unit" class="w-full border rounded px-3 py-2" placeholder="e.g. kg, L, pcs">
-  </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700">PO Number</label>
+      <input type="text" name="po_number" id="po_number"
+             class="w-full border rounded px-3 py-2"
+             placeholder="Type or select PO number" list="po_suggestions" required>
+      <datalist id="po_suggestions"></datalist>
+    </div>
 
-  <div>
-    <label class="block text-sm font-medium text-gray-700">Quantity</label>
-    <input type="number" step="0.01" name="quantity" id="quantity" class="w-full border rounded px-3 py-2" required>
-  </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Unit</label>
+      <input type="text" name="unit" id="unit"
+             class="w-full border rounded px-3 py-2"
+             placeholder="e.g. kg, L, pcs">
+    </div>
 
-  <div>
-    <label class="block text-sm font-medium text-gray-700">Unit Cost (KSh)</label>
-    <input type="number" step="0.01" name="cost" id="cost" class="w-full border rounded px-3 py-2" required>
-  </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Quantity</label>
+      <input type="number" step="0.01" name="quantity" id="quantity"
+             class="w-full border rounded px-3 py-2" required>
+    </div>
 
-  <div class="md:col-span-2 flex justify-center mt-4">
-    <button type="submit" name="add_material"
-            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg">
-      Add Material
-    </button>
-  </div>
-</form>
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Unit Cost (KSh)</label>
+      <input type="number" step="0.01" name="cost" id="cost"
+             class="w-full border rounded px-3 py-2 bg-gray-100" readonly>
+    </div>
 
+    <div class="md:col-span-2 flex justify-center mt-4">
+      <button type="submit" name="add_material"
+              class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg">
+        Add Material
+      </button>
+    </div>
+  </form>
+  <!-- ✅ END FORM -->
 
   <!-- ✅ Filter Section -->
   <form method="GET" class="flex flex-wrap gap-4 mb-4 items-end">
@@ -161,7 +199,7 @@ $materials = $conn->query($query);
           <th class="border px-2 py-1">Cost</th>
           <th class="border px-2 py-1">Total</th>
           <th class="border px-2 py-1">Date</th>
-          <th class="border px-2 py-1">Actions</th>
+          
         </tr>
       </thead>
       <tbody>
@@ -175,10 +213,7 @@ $materials = $conn->query($query);
             <td class="border px-2 py-1"><?= number_format($row['cost'], 2) ?></td>
             <td class="border px-2 py-1 font-semibold"><?= number_format($row['quantity'] * $row['cost'], 2) ?></td>
             <td class="border px-2 py-1"><?= $row['created_at'] ?></td>
-            <td class="border px-2 py-1">
-              <button onclick="openEditModal(<?= $row['id'] ?>, '<?= htmlspecialchars($row['material_name']) ?>', <?= $row['quantity'] ?>, <?= $row['cost'] ?>)" 
-                      class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded">Edit</button>
-            </td>
+            
           </tr>
           <?php endwhile; ?>
         <?php else: ?>
@@ -214,26 +249,55 @@ $materials = $conn->query($query);
     </form>
   </div>
 </div>
-
 <script>
 $(document).ready(function() {
-  // ✅ When PO is selected, fetch all its details from order_items
+  // ✅ Fetch material code automatically
+  $('#material_name').on('change', function() {
+    const materialName = $(this).val();
+    if (materialName) {
+      $.getJSON('get_material_code.php', { material_name: materialName }, function(data) {
+        if (data && data.chemical_code) {
+          $('#chemical_code').val(data.chemical_code);
+        } else {
+          $('#chemical_code').val('');
+        }
+      });
+    }
+  });
+
+  // ✅ Suggest PO numbers dynamically as user types
+  $('#po_number').on('input', function() {
+    const query = $(this).val();
+    if (query.length >= 1) { // only start suggesting after 1 character
+      $.getJSON('search_po_numbers.php', { q: query }, function(data) {
+        const list = $('#po_suggestions');
+        list.empty();
+        if (Array.isArray(data) && data.length > 0) {
+          data.forEach(po => {
+            list.append(`<option value="${po}">`);
+          });
+        }
+      });
+    }
+  });
+
+  // ✅ When PO number changes, fetch related quantity & cost
   $('#po_number').on('change', function() {
-    const po_number = $(this).val();
-    if (po_number) {
-      $.getJSON('get_po_item_details.php', { po_number }, function(data) {
+    const po_no = $(this).val();
+    const chemical_name = $('#material_name').val();
+    if (po_no && chemical_name) {
+      $.getJSON('fetch_po_details.php', { po_no: po_no, chemical_name: chemical_name }, function(data) {
         if (data) {
-          $('#material_name').val(data.item_name || '');
           $('#quantity').val(data.quantity || '');
-          $('#unit').val(data.unit || '');
           $('#cost').val(data.unit_price || '');
+          $('#unit').val(data.unit || '');
         }
       });
     }
   });
 });
 
-// ✅ Edit modal functions
+// ✅ Modal controls
 function openEditModal(id, name, qty, cost) {
   $('#edit_id').val(id);
   $('#edit_material_name').val(name);
@@ -246,7 +310,6 @@ function closeEditModal() {
   $('#editModal').addClass('hidden');
 }
 </script>
-
 
 </body>
 </html>

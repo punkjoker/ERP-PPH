@@ -8,7 +8,7 @@
       S
     </div>
     <div class="ml-3">
-      <p class="font-semibold text-blue-800">Staff Department</p>
+      <p class="font-semibold text-blue-800">Staff Portal</p>
       <a href="profile.php" class="text-sm text-blue-600 hover:underline">Edit Profile</a>
     </div>
   </div>
@@ -39,11 +39,7 @@
             <i class="fa-solid fa-graduation-cap mr-2 text-blue-600"></i>Daily Reports
           </a>
         </li>
-        <li>
-          <a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded">
-            <i class="fa-solid fa-plus-circle mr-2 text-blue-600"></i>New Item Request
-          </a>
-        </li>
+      
         <li>
           <a href="my_payrolls.php" class="block hover:bg-blue-200 p-2 rounded">
             <i class="fa-solid fa-money-check-dollar mr-2 text-blue-600"></i>My Payrolls
@@ -54,11 +50,7 @@
             <i class="fa-solid fa-chart-line mr-2 text-blue-600"></i>Performance
           </a>
         </li>
-        <li>
-          <a href="staff_reports.php" class="block hover:bg-blue-200 p-2 rounded">
-            <i class="fa-solid fa-file-alt mr-2 text-blue-600"></i>Reports
-          </a>
-        </li>
+      
       </ul>
     </div>
   </nav>

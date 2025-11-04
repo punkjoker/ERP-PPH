@@ -40,7 +40,7 @@
         <li><a href="breakfast_expense.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-mug-hot mr-2"></i>Breakfast Expense</a></li>
         <li><a href="record_training.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-chalkboard-user mr-2"></i>Record Training</a></li>
         <li><a href="all_daily_reports.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-chalkboard-teacher mr-2"></i>Daily Reports</a></li>
-        <li><a href="packaging_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-box mr-2"></i>Packaging Request</a></li>
+        
         <li><a href="view_all_evaluations.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-alt mr-2"></i>View All Evaluations</a></li>
         <li><a href="employee_appraisal.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-alt mr-2"></i>Employee Appraisal</a></li>
         <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-plus mr-2"></i>New Item Request</a></li>
@@ -70,6 +70,7 @@
         <li><a href="inspect_raw_materials.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-vial mr-2"></i>Inspect Chemicals In</a></li>
         <li><a href="inspect_finished_products.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-clipboard-check mr-2"></i>Inspect Finished Products</a></li>
         <li><a href="quality_manager_review.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-user-tie mr-2"></i>Quality Manager Review</a></li>
+         <li><a href="rejected_chemicals.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-ban mr-2"></i>Disposeds Chemicals</a></li>
         <li><a href="record_production_run.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-cogs mr-2"></i>View Production Runs</a></li>
         <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-plus mr-2"></i>New Item Request</a></li>
         <li><a href="disposables.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-trash-can mr-2"></i>Disposals</a></li>
@@ -90,8 +91,10 @@
         <li><a href="engineering_products.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-gear mr-2"></i>Engineer Products Inventory</a></li>
         <li><a href="stock_in.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-arrow-down mr-2"></i>Stock In</a></li>
         <li><a href="qc_approval.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-thumbs-up mr-2"></i>QC Approval</a></li>
+        <li><a href="rejected_chemicals.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-ban mr-2"></i>Disposeds Chemicals</a></li>
         <li><a href="stock_out.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-arrow-up mr-2"></i>Stock Out</a></li>
         <li><a href="production_requests.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-list-ul mr-2"></i>Production Requests</a></li>
+        <li><a href="packaging_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-box mr-2"></i>Packaging Request</a></li>
         <li><a href="view_inventory.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-warehouse mr-2"></i>View Inventory</a></li>
         <li><a href="bill_of_material_history.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-scroll mr-2"></i>View Bill Of Material</a></li>
         <li><a href="order_deliveries.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-truck mr-2"></i>Create Delivery</a></li>
@@ -195,6 +198,34 @@
       localStorage.setItem("sidebar-scroll", sidebar.scrollTop);
     });
   });
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const sidebar = document.querySelector(".overflow-y-auto");
+
+  // Restore scroll position
+  const savedScroll = localStorage.getItem("sidebar-scroll");
+  if (savedScroll) sidebar.scrollTop = parseInt(savedScroll, 10);
+
+  sidebar.addEventListener("scroll", function () {
+    localStorage.setItem("sidebar-scroll", sidebar.scrollTop);
+  });
+
+  // Highlight active link
+  const currentPage = window.location.pathname.split("/").pop();
+  const navLinks = document.querySelectorAll("nav a");
+
+  navLinks.forEach(link => {
+    const linkPage = link.getAttribute("href");
+
+    if (linkPage === currentPage) {
+      link.classList.add("bg-blue-500", "text-white", "font-semibold");
+      link.classList.remove("hover:bg-blue-200");
+    } else {
+      link.classList.remove("bg-blue-500", "text-white", "font-semibold");
+    }
+  });
+});
 </script>
 
 </div>

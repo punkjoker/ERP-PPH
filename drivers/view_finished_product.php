@@ -4,7 +4,7 @@ include 'db_con.php';
 $bom_id = $_GET['id'] ?? 0;
 
 // ✅ Fetch production + product + QC details
-$sql = "SELECT pr.*, p.name AS product_name, bom.requested_by, bom.description, bom.bom_date, bom.batch_number, qc.created_at AS qc_date
+$sql = "SELECT pr.*, p.name AS product_name, bom.requested_by, bom.description, bom.bom_date, bom.batch_number, bom.expiry_date, qc.created_at AS qc_date
         FROM production_runs pr
         JOIN bill_of_materials bom ON pr.request_id = bom.id
         JOIN products p ON bom.product_id = p.id
@@ -55,7 +55,7 @@ if ($pack_result && $pack_result->num_rows > 0) {
 // ✅ Fetch Bill of Materials (BOM) data for this product
 $bom_stmt = $conn->prepare("
   SELECT b.id, b.product_id, p.name AS product_name, b.status, b.description,
-         b.requested_by, b.bom_date, b.issued_by, b.remarks, b.issue_date, b.batch_number
+         b.requested_by, b.bom_date, b.issued_by, b.remarks, b.issue_date,b.expiry_date, b.batch_number
   FROM bill_of_materials b
   JOIN products p ON b.product_id = p.id
   WHERE b.id = ?
@@ -99,6 +99,23 @@ foreach ($packaging_items as $pack) {
     $total_packaging_cost += $pack['total_cost'];
 }
 
+// ✅ Fetch Label Reconciliation (linked by batch_number)
+$label_stmt = $conn->prepare("
+  SELECT * 
+  FROM label_reconciliation 
+  WHERE batch_number = ?
+  ORDER BY reconciled_at DESC
+");
+$label_stmt->bind_param("s", $production['batch_number']);
+$label_stmt->execute();
+$label_items = $label_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$label_stmt->close();
+
+// ✅ Calculate total label cost
+$total_label_cost = 0;
+foreach ($label_items as $item) {
+    $total_label_cost += $item['total_cost'];
+}
 
 ?>
 
@@ -162,6 +179,7 @@ foreach ($packaging_items as $pack) {
     <p><span class="font-medium text-gray-700">BOM Date:</span> <?= htmlspecialchars($bom['bom_date']) ?></p>
     <p><span class="font-medium text-gray-700">Issue Date:</span> <?= htmlspecialchars($bom['issue_date']) ?></p>
     <p><span class="font-medium text-gray-700">Remarks:</span> <?= htmlspecialchars($bom['remarks']) ?></p>
+    <p><span class="font-medium text-gray-700">Expiry date:</span> <?= htmlspecialchars($bom['expiry_date']) ?></p>
 
     <?php if($first_pack): ?>
         <p>
@@ -245,7 +263,7 @@ $total_production_cost = $total_cost + $total_packaging_cost;
                 </tr>
                 <?php endforeach; ?>
                 <tr class="bg-gray-100 font-semibold">
-                    <td colspan="7" class="text-right border px-3 py-2">Total Production Cost</td>
+                    <td colspan="7" class="text-right border px-3 py-2">Total Production Cost(BOM)</td>
                     <td class="border px-3 py-2"><?= number_format($total_cost, 2) ?></td>
                 </tr>
             </tbody>
@@ -261,8 +279,8 @@ $total_production_cost = $total_cost + $total_packaging_cost;
             <thead class="bg-gray-100">
                 <tr>
                     <th class="border px-3 py-2">Item Name</th>
-                    <th class="border px-3 py-2">Units</th>
                     <th class="border px-3 py-2">Quantity Packed</th>
+                    <th class="border px-3 py-2">Units packed</th>
                     <th class="border px-3 py-2">Cost per Unit</th>
                     <th class="border px-3 py-2">Total Cost</th>
                     <th class="border px-3 py-2">Status</th>
@@ -296,14 +314,69 @@ $total_production_cost = $total_cost + $total_packaging_cost;
                     <td class="border px-3 py-2"><?= number_format($total_packaging_cost, 2) ?></td>
                     <td class="border px-3 py-2"></td>
                 </tr>
-                <tr class="bg-gray-200 font-bold">
-                    <td colspan="4" class="text-right border px-3 py-2">TOTAL PRODUCTION COST (BOM + Packaging)</td>
-                    <td class="border px-3 py-2"><?= number_format($total_production_cost, 2) ?></td>
-                    <td class="border px-3 py-2"></td>
-                </tr>
+                
             </tbody>
         </table>
     </div>
+</section>
+<!-- ✅ Label Reconciliation -->
+<section class="mb-8">
+  <h3 class="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Label Reconciliation</h3>
+  <div class="overflow-x-auto">
+    <table class="w-full border border-gray-300 text-sm">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="border px-3 py-2">Material Name</th>
+          <th class="border px-3 py-2">Quantity Removed</th>
+         
+          <th class="border px-3 py-2">Used</th>
+          <th class="border px-3 py-2">Wasted</th>
+          <th class="border px-3 py-2">Issued To</th>
+          <th class="border px-3 py-2">Batch Number</th>
+          <th class="border px-3 py-2">Total Cost</th>
+          
+          <th class="border px-3 py-2">Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php if (count($label_items) > 0): ?>
+          <?php foreach ($label_items as $lbl): ?>
+            <tr class="hover:bg-gray-50">
+              <td class="border px-3 py-2"><?= htmlspecialchars($lbl['material_name']) ?></td>
+              <td class="border px-3 py-2"><?= (int)$lbl['quantity_removed'] ?></td>
+              
+              <td class="border px-3 py-2"><?= (int)$lbl['used'] ?></td>
+              <td class="border px-3 py-2 text-red-600"><?= (int)$lbl['wasted'] ?></td>
+              <td class="border px-3 py-2"><?= htmlspecialchars($lbl['issued_to']) ?></td>
+              <td class="border px-3 py-2"><?= htmlspecialchars($lbl['batch_number']) ?></td>
+              <td class="border px-3 py-2"><?= number_format($lbl['total_cost'], 2) ?></td>
+             
+              <td class="border px-3 py-2"><?= date('d M Y, h:i A', strtotime($lbl['reconciled_at'])) ?></td>
+            </tr>
+          <?php endforeach; ?>
+          <tr class="bg-gray-100 font-semibold">
+            <td colspan="7" class="text-right border px-3 py-2">Total Label Cost</td>
+            <td class="border px-3 py-2"><?= number_format($total_label_cost, 2) ?></td>
+            <td colspan="2" class="border px-3 py-2"></td>
+          </tr>
+          <tr class="bg-gray-200 font-bold">
+  <td colspan="4" class="text-right border px-3 py-2">
+    TOTAL PRODUCTION COST (BOM + Packaging + Labels)
+  </td>
+  <td class="border px-3 py-2">
+    <?= number_format($total_production_cost + $total_label_cost, 2) ?>
+  </td>
+  <td class="border px-3 py-2"></td>
+</tr>
+
+        <?php else: ?>
+          <tr>
+            <td colspan="10" class="text-center py-3 text-gray-500">No label reconciliation records found for this batch.</td>
+          </tr>
+        <?php endif; ?>
+      </tbody>
+    </table>
+  </div>
 </section>
 
     <!-- ✅ Procedures -->

@@ -8,6 +8,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_material'])) {
     $quantity_removed = intval($_POST['quantity_removed']);
     $issued_to = trim($_POST['issued_to']);
     $description = trim($_POST['description']);
+    $batch_number = trim($_POST['batch_number']);
+    $used = floatval($_POST['used']);
+    $wasted = floatval($_POST['wasted']);
 
     $stmt = $conn->prepare("SELECT * FROM materials WHERE id=? ORDER BY created_at ASC LIMIT 1");
     $stmt->bind_param("i", $material_id);
@@ -22,12 +25,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_material'])) {
             $update->bind_param("ii", $remaining, $material_id);
             $update->execute();
 
-            $insert = $conn->prepare(
-                "INSERT INTO material_out_history (material_id, material_name, quantity_removed, remaining_quantity, issued_to, description) 
-                 VALUES (?, ?, ?, ?, ?, ?)"
-            );
-            $insert->bind_param("isiiss", $material_id, $material['material_name'], $quantity_removed, $remaining, $issued_to, $description);
-            $insert->execute();
+           // ✅ Calculate costs
+$unit_cost = floatval($material['cost']);
+$total_cost = $unit_cost * $quantity_removed;
+
+$insert = $conn->prepare("
+    INSERT INTO material_out_history 
+    (material_id, material_name, quantity_removed, remaining_quantity, issued_to, description, batch_number, used, wasted, unit_cost, total_cost) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+");
+$insert->bind_param(
+    "isiisssdddd", 
+    $material_id, 
+    $material['material_name'], 
+    $quantity_removed, 
+    $remaining, 
+    $issued_to, 
+    $description, 
+    $batch_number,
+    $used, 
+    $wasted, 
+    $unit_cost, 
+    $total_cost
+);
+$insert->execute();
+
+// ✅ Also insert into label_reconciliation
+$insert_label = $conn->prepare("
+    INSERT INTO label_reconciliation 
+    (material_id, material_name, quantity_removed, remaining_quantity, issued_to, description, batch_number, used, wasted, unit_cost, total_cost) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+");
+$insert_label->bind_param(
+    "isiisssdddd", 
+    $material_id, 
+    $material['material_name'], 
+    $quantity_removed, 
+    $remaining, 
+    $issued_to, 
+    $description, 
+    $batch_number,
+    $used, 
+    $wasted, 
+    $unit_cost, 
+    $total_cost
+);
+$insert_label->execute();
+
 
             $message = "✅ {$quantity_removed} units removed from {$material['material_name']}. Remaining: $remaining";
         } else {
@@ -40,6 +84,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_material'])) {
 
 // Fetch materials
 $materials = $conn->query("SELECT * FROM materials ORDER BY created_at ASC");
+
+// Fetch BOM batches for dropdown
+$batches = $conn->query("SELECT DISTINCT batch_number FROM bill_of_materials ORDER BY batch_number ASC");
 
 $from_date = $_GET['from_date'] ?? '';
 $to_date   = $_GET['to_date'] ?? '';
@@ -108,10 +155,39 @@ $removed_items = $conn->query($query);
       <label class="block text-sm text-gray-700 font-medium">Remaining Quantity</label>
       <input type="text" id="remaining_qty" class="w-full border rounded px-3 py-2 bg-gray-100" readonly>
     </div>
-
+<!-- ✅ Batch Number Dropdown -->
+    <div>
+      <label class="block text-sm text-gray-700 font-medium">Batch Number</label>
+      <select name="batch_number" class="w-full border rounded px-3 py-2" required>
+        <option value="">-- Select Batch --</option>
+        <?php while ($b = $batches->fetch_assoc()): ?>
+          <option value="<?= htmlspecialchars($b['batch_number']) ?>"><?= htmlspecialchars($b['batch_number']) ?></option>
+        <?php endwhile; ?>
+      </select>
+    </div>
     <div>
       <label class="block text-sm text-gray-700 font-medium">Quantity to Remove</label>
       <input type="number" name="quantity_removed" class="w-full border rounded px-3 py-2" required>
+    </div>
+    <div>
+  <label class="block text-sm text-gray-700 font-medium">Unit Cost</label>
+  <input type="text" name="unit_cost" id="unit_cost" class="w-full border rounded px-3 py-2 bg-gray-100" readonly>
+</div>
+
+<div>
+  <label class="block text-sm text-gray-700 font-medium">Total Cost</label>
+  <input type="text" name="total_cost" id="total_cost" class="w-full border rounded px-3 py-2 bg-gray-100" readonly>
+</div>
+
+  <!-- ✅ Used and Wasted -->
+    <div>
+      <label class="block text-sm text-gray-700 font-medium">Used Quantity</label>
+      <input type="number" step="0.01" name="used" class="w-full border rounded px-3 py-2">
+    </div>
+
+    <div>
+      <label class="block text-sm text-gray-700 font-medium">Wasted Quantity</label>
+      <input type="number" step="0.01" name="wasted" class="w-full border rounded px-3 py-2">
     </div>
 
     <div>
@@ -167,6 +243,7 @@ $removed_items = $conn->query($query);
           <th class="border px-2 py-1">Qty Removed</th>
           <th class="border px-2 py-1">Remaining</th>
           <th class="border px-2 py-1">Issued To</th>
+          <th class="border px-2 py-1">Batch Issued to</th>
           <th class="border px-2 py-1">Date</th>
           <th class="border px-2 py-1">Actions</th>
         </tr>
@@ -179,6 +256,7 @@ $removed_items = $conn->query($query);
               <td class="border px-2 py-1 text-red-600 font-bold"><?= $row['quantity_removed'] ?></td>
               <td class="border px-2 py-1 text-green-700"><?= $row['remaining_quantity'] ?></td>
               <td class="border px-2 py-1"><?= htmlspecialchars($row['issued_to']) ?></td>
+              <td class="border px-2 py-1"><?= htmlspecialchars($row['batch_number']) ?></td>
               <td class="border px-2 py-1"><?= $row['removed_at'] ?></td>
               <td class="border px-2 py-1 flex gap-2">
   <a href="view_material_history.php?id=<?= $row['material_id'] ?>" 
@@ -243,18 +321,35 @@ $removed_items = $conn->query($query);
 </div>
 
 <script>
-  function updateMaterialInfo() {
-    const select = document.getElementById('material_id');
-    const option = select.options[select.selectedIndex];
-    if (option.value) {
-      document.getElementById('original_qty').value = option.getAttribute('data-original');
-      document.getElementById('remaining_qty').value = option.getAttribute('data-original');
-    } else {
-      document.getElementById('original_qty').value = '';
-      document.getElementById('remaining_qty').value = '';
-    }
+function updateMaterialInfo() {
+  const select = document.getElementById('material_id');
+  const option = select.options[select.selectedIndex];
+
+  if (option.value) {
+    const materialId = option.value;
+    fetch('get_material_cost.php?id=' + materialId)
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('original_qty').value = data.quantity;
+        document.getElementById('remaining_qty').value = data.quantity;
+        document.getElementById('unit_cost').value = data.cost;
+      });
+  } else {
+    document.getElementById('original_qty').value = '';
+    document.getElementById('remaining_qty').value = '';
+    document.getElementById('unit_cost').value = '';
+    document.getElementById('total_cost').value = '';
   }
+}
+
+// Auto-calc total cost
+document.querySelector('input[name="quantity_removed"]').addEventListener('input', function() {
+  const qty = parseFloat(this.value) || 0;
+  const unitCost = parseFloat(document.getElementById('unit_cost').value) || 0;
+  document.getElementById('total_cost').value = (qty * unitCost).toFixed(2);
+});
 </script>
+
 <script>
   function printFiltered() {
     const printContent = document.getElementById('print-section').innerHTML;

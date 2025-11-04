@@ -32,10 +32,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['product_id'])) {
         // Insert main BOM record
        $batch_number = $_POST['batch_number'] ?? '';
 
+$expiry_date = $_POST['expiry_date'] ?? null;
+
 $stmt = $conn->prepare("INSERT INTO bill_of_materials 
-    (product_id, bom_date, batch_number, requested_by, description, status) 
-    VALUES (?, ?, ?, ?, ?, 'Pending')");
-$stmt->bind_param("issss", $product_id, $bom_date, $batch_number, $requested_by, $description);
+    (product_id, bom_date, expiry_date, batch_number, requested_by, description, status) 
+    VALUES (?, ?, ?, ?, ?, ?, 'Pending')");
+$stmt->bind_param("isssss", $product_id, $bom_date, $expiry_date, $batch_number, $requested_by, $description);
 
         $stmt->execute();
         $bom_id = $stmt->insert_id;
@@ -298,6 +300,10 @@ document.addEventListener("DOMContentLoaded", function () {
                     <label class="block text-gray-700 font-semibold mb-1">BOM Date</label>
                     <input type="date" name="bom_date" required class="border rounded px-3 py-2 w-full">
                 </div>
+                <div>
+    <label class="block text-gray-700 font-semibold mb-1">Expiry Date</label>
+    <input type="date" name="expiry_date" class="border rounded px-3 py-2 w-full">
+</div>
                 <div>
     <label class="block text-gray-700 font-semibold mb-1">Batch Number</label>
     <input type="text" name="batch_number" required 

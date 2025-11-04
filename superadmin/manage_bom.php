@@ -32,10 +32,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['product_id'])) {
         // Insert main BOM record
        $batch_number = $_POST['batch_number'] ?? '';
 
+$expiry_date = $_POST['expiry_date'] ?? null;
+
 $stmt = $conn->prepare("INSERT INTO bill_of_materials 
-    (product_id, bom_date, batch_number, requested_by, description, status) 
-    VALUES (?, ?, ?, ?, ?, 'Pending')");
-$stmt->bind_param("issss", $product_id, $bom_date, $batch_number, $requested_by, $description);
+    (product_id, bom_date, expiry_date, batch_number, requested_by, description, status) 
+    VALUES (?, ?, ?, ?, ?, ?, 'Pending')");
+$stmt->bind_param("isssss", $product_id, $bom_date, $expiry_date, $batch_number, $requested_by, $description);
 
         $stmt->execute();
         $bom_id = $stmt->insert_id;
@@ -54,13 +56,10 @@ $stmt->bind_param("issss", $product_id, $bom_date, $batch_number, $requested_by,
             $total_cost = floatval($chem['total_cost']);
 $chemical_code = $chem['chemical_code'] ?? '';
 
-$expiry_date = $_POST['expiry_date'] ?? null;
-
-$stmt = $conn->prepare("INSERT INTO bill_of_materials 
-    (product_id, bom_date, expiry_date, batch_number, requested_by, description, status) 
-    VALUES (?, ?, ?, ?, ?, ?, 'Pending')");
-$stmt->bind_param("isssss", $product_id, $bom_date, $expiry_date, $batch_number, $requested_by, $description);
-
+$stmt = $conn->prepare("INSERT INTO bill_of_material_items 
+    (bom_id, chemical_id, chemical_name, chemical_code, rm_lot_no, quantity_requested, unit, unit_price, total_cost) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+$stmt->bind_param("iisssdsdd", $bom_id, $chemical_id, $chemical_name, $chemical_code, $lot_no, $qty_requested, $qty_unit, $unit_price, $total_cost);
 $stmt->execute();
 $stmt->close();
 

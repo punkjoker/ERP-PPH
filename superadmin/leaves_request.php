@@ -13,9 +13,11 @@ $params = [];
 $types = "";
 
 // --- Base Query ---
-$sql = "SELECT l.*, u.full_name, u.national_id 
+$sql = "SELECT l.*, u.full_name, u.national_id
         FROM leaves l
-        JOIN users u ON l.user_id = u.user_id";
+        JOIN users u ON l.user_id = u.user_id
+        JOIN groups g ON u.group_id = g.group_id
+        WHERE g.group_name = 'staff'";
 
 
 // --- Apply filters ---
@@ -37,7 +39,7 @@ if ($from_date && $to_date) {
 }
 
 if (!empty($where)) {
-    $sql .= " WHERE " . implode(" AND ", $where);
+    $sql .= " AND " . implode(" AND ", $where);
 }
 
 $sql .= " ORDER BY l.start_date DESC";
@@ -57,7 +59,14 @@ while ($row = $res->fetch_assoc()) {
 $stmt->close();
 
 // --- Fetch all users for filter dropdown ---
-$users = $conn->query("SELECT user_id, full_name, national_id FROM users ORDER BY full_name ASC")->fetch_all(MYSQLI_ASSOC);
+$users = $conn->query("
+    SELECT u.user_id, u.full_name, u.national_id
+    FROM users u
+    JOIN groups g ON u.group_id = g.group_id
+    WHERE g.group_name = 'Staff'
+    ORDER BY u.full_name ASC
+")->fetch_all(MYSQLI_ASSOC);
+
 
 // --- Fetch distinct leave types ---
 $types_res = $conn->query("SELECT DISTINCT leave_type FROM leaves ORDER BY leave_type ASC")->fetch_all(MYSQLI_ASSOC);

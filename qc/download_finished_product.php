@@ -12,7 +12,8 @@ SELECT
     p.product_code,
     bom.requested_by, 
     bom.description, 
-    bom.bom_date, 
+    bom.bom_date,
+    bom.expiry_date, 
     bom.batch_number,
     qc.created_at AS qc_date,
     SUM(bm.std_quantity) AS std_batch_size  -- sum of standard quantities
@@ -34,7 +35,7 @@ $production = $result->fetch_assoc();
 
 // ✅ Fetch BOM
 $bom_stmt = $conn->prepare("
-  SELECT b.id, b.product_id, p.name AS product_name, b.status, b.description,
+  SELECT b.id, b.product_id, p.name AS product_name, b.status, b.expiry_date, b.description,
          b.requested_by, b.bom_date, b.issued_by, b.remarks, b.issue_date, b.batch_number
   FROM bill_of_materials b
   JOIN products p ON b.product_id = p.id
@@ -127,7 +128,7 @@ if(count($packaging_items) > 0) {
          ['PRODUCT NAME', $data['product_name'], 'PRODUCT CODE', $data['product_code']], // dynamic code
         ['BATCH NUMBER', $data['batch_number'], 'EDITION NO.', '007'],
         ['MFG. DATE', date('d M Y', strtotime($data['bom_date'])), 'STD BATCH SIZE', $data['std_batch_size'].' Kg'], // dynamic
-        ['EXP. DATE', '', 'ACTUAL BATCH SIZE', $data['obtained_yield']],  // ✅ Actual batch from obtained_yield
+        ['EXP. DATE', $data['expiry_date'], 'ACTUAL BATCH SIZE', $data['obtained_yield']],  // ✅ Actual batch from obtained_yield
         ['EFFECTIVE DATE', '1ST SEPTEMBER 2024', 'PACK SIZE', $pack_size_full], // ✅ full pack size
         ['REVIEW DATE', '1ST AUGUST 2027', 'PAGES', '1 of 1']
     ];
@@ -231,7 +232,43 @@ foreach($packaging_items as $p){
 $pdf->SetFont('Arial','B',10);
 $pdf->Cell(155,8,'Total Packaging Cost',1,0,'R',true);
 $pdf->Cell(25,8,number_format($total_pack_cost,2),1,1,'R');
-$pdf->Cell(155,8,'GRAND TOTAL (BOM + Packaging)',1,0,'R',true);
+
+$pdf->Ln(6);
+
+// ✅ Label Reconciliation Section
+$pdf->SectionTitle('Label Reconciliation');
+$pdf->TableHeader(['Material','Qty Issued','Issued To','Used','Wasted','Total Cost'], [35,25,25,30,20,20,25]);
+$pdf->SetFont('Arial','',9);
+
+// Fetch label reconciliation records
+$label_stmt = $conn->prepare("
+    SELECT material_name, quantity_removed, remaining_quantity, issued_to, used, wasted, total_cost 
+    FROM label_reconciliation
+    WHERE batch_number = ?
+");
+$label_stmt->bind_param("s", $production['batch_number']);
+$label_stmt->execute();
+$labels = $label_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$label_stmt->close();
+
+$total_label_cost = 0;
+foreach ($labels as $l) {
+    $pdf->Cell(35,7,$l['material_name'],1);
+    $pdf->Cell(25,7,(int)$l['quantity_removed'],1,0,'C');
+    
+    $pdf->Cell(30,7,$l['issued_to'],1);
+    $pdf->Cell(20,7,$l['used'],1,0,'C');
+    $pdf->Cell(20,7,$l['wasted'],1,0,'C');
+    $pdf->Cell(25,7,number_format($l['total_cost'],2),1,1,'R');
+    $total_label_cost += $l['total_cost'];
+}
+$pdf->SetFont('Arial','B',10);
+$pdf->Cell(155,8,'Total Label Cost',1,0,'R',true);
+$pdf->Cell(25,8,number_format($total_label_cost,2),1,1,'R');
+
+// ✅ Update Grand Total
+$grand_total = $total_chem_cost + $total_pack_cost + $total_label_cost;
+$pdf->Cell(155,8,'GRAND TOTAL (BOM + Packaging + Label)',1,0,'R',true);
 $pdf->Cell(25,8,number_format($grand_total,2),1,1,'R');
 $pdf->Ln(6);
 

@@ -16,19 +16,23 @@
   <nav class="space-y-6 flex-1">
     <div>
       <h3 class="text-blue-700 font-semibold uppercase">HR</h3>
-     <ul class="ml-4 space-y-2 text-sm">
+     
+      <ul class="ml-4 space-y-2 text-sm">
         <li><a href="add_employee.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-user-plus mr-2"></i>Add Employee</a></li>
         <li><a href="view_employees.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-users mr-2"></i>View Employees</a></li>
         <li><a href="employee_information.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-id-card mr-2"></i>Employees Information</a></li>
         <li><a href="create_staff_account.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-calendar-alt mr-2"></i>Create Staff Account</a></li>
-        <li><a href="perfomance_evaluation_list.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-star mr-2"></i>Performance Evaluation</a></li>
+        
         <li><a href="leaves_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-calendar-check mr-2"></i>Leaves request</a></li>
-<li><a href="view_training_requests.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-invoice-dollar mr-2"></i>Training requests</a></li>
+        <li><a href="view_training_requests.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-invoice-dollar mr-2"></i>Training requests</a></li>
         <li><a href="manage_expenses.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-money-bill mr-2"></i>Add Expense</a></li>
         <li><a href="add_lunch_expense.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-utensils mr-2"></i>Lunch Expense</a></li>
         <li><a href="breakfast_expense.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-mug-hot mr-2"></i>Breakfast Expense</a></li>
         <li><a href="record_training.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-chalkboard-user mr-2"></i>Record Training</a></li>
-       
+        <li><a href="all_daily_reports.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-chalkboard-teacher mr-2"></i>Daily Reports</a></li>
+      
+        <li><a href="view_all_evaluations.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-alt mr-2"></i>View All Evaluations</a></li>
+        <li><a href="employee_appraisal.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-alt mr-2"></i>Employee Appraisal</a></li>
         <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-plus mr-2"></i>New Item Request</a></li>
         <li><a href="hr_report.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-lines mr-2"></i>HR Report</a></li>
       </ul>
@@ -39,4 +43,49 @@
   <div class="mt-auto">
     <a href="logout.php" class="block bg-red-500 hover:bg-red-600 text-white text-center py-2 rounded">Logout</a>
   </div>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const sidebar = document.querySelector(".overflow-y-auto");
+
+    // Restore previous scroll position
+    const savedScroll = localStorage.getItem("sidebar-scroll");
+    if (savedScroll) {
+      sidebar.scrollTop = parseInt(savedScroll, 10);
+    }
+
+    // Save scroll position whenever user scrolls
+    sidebar.addEventListener("scroll", function () {
+      localStorage.setItem("sidebar-scroll", sidebar.scrollTop);
+    });
+  });
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const sidebar = document.querySelector(".overflow-y-auto");
+
+  // Restore scroll position
+  const savedScroll = localStorage.getItem("sidebar-scroll");
+  if (savedScroll) sidebar.scrollTop = parseInt(savedScroll, 10);
+
+  sidebar.addEventListener("scroll", function () {
+    localStorage.setItem("sidebar-scroll", sidebar.scrollTop);
+  });
+
+  // Highlight active link
+  const currentPage = window.location.pathname.split("/").pop();
+  const navLinks = document.querySelectorAll("nav a");
+
+  navLinks.forEach(link => {
+    const linkPage = link.getAttribute("href");
+
+    if (linkPage === currentPage) {
+      link.classList.add("bg-blue-500", "text-white", "font-semibold");
+      link.classList.remove("hover:bg-blue-200");
+    } else {
+      link.classList.remove("bg-blue-500", "text-white", "font-semibold");
+    }
+  });
+});
+</script>
+
 </div>

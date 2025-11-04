@@ -91,6 +91,7 @@ $history = $history_stmt->get_result();
           <th class="border px-2 py-1">Qty Removed</th>
           <th class="border px-2 py-1">Remaining</th>
           <th class="border px-2 py-1">Issued To</th>
+          <th class="border px-2 py-1">Batch Issued to</th
           <th class="border px-2 py-1">Description</th>
           <th class="border px-2 py-1">Date</th>
         </tr>
@@ -102,6 +103,7 @@ $history = $history_stmt->get_result();
               <td class="border px-2 py-1 text-red-600 font-bold"><?= $row['quantity_removed'] ?></td>
               <td class="border px-2 py-1 text-green-700"><?= $row['remaining_quantity'] ?></td>
               <td class="border px-2 py-1"><?= htmlspecialchars($row['issued_to']) ?></td>
+              <td class="border px-2 py-1"><?= htmlspecialchars($row['batch_number']) ?></td>
               <td class="border px-2 py-1"><?= htmlspecialchars($row['description']) ?></td>
               <td class="border px-2 py-1"><?= $row['removed_at'] ?></td>
             </tr>

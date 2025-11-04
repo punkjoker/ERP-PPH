@@ -31,7 +31,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_analysis'])) {
     }
     $tests_json = json_encode($tests);
 
-    // Insert into inspected_chemicals_in
+    // If status is 'Denied' move to rejected_chemicals_in
+    if ($status === 'Denied') {
+        // 1️⃣ Insert into rejected_chemicals_in (copy all data from chemicals_in)
+        $copy_sql = "
+            INSERT INTO rejected_chemicals_in 
+            SELECT * FROM chemicals_in WHERE id = ?
+        ";
+        $copy_stmt = $conn->prepare($copy_sql);
+        $copy_stmt->bind_param("i", $chemical_id);
+        $copy_stmt->execute();
+
+        // 2️⃣ Delete from chemicals_in
+        $del_stmt = $conn->prepare("DELETE FROM chemicals_in WHERE id = ?");
+        $del_stmt->bind_param("i", $chemical_id);
+        $del_stmt->execute();
+
+        // 3️⃣ Redirect back
+        header("Location: inspect_raw_materials.php?msg=rejected");
+        exit();
+    }
+
+    // For approved or pending: insert into inspected_chemicals_in
     $ins_stmt = $conn->prepare("INSERT INTO inspected_chemicals_in 
         (chemical_id, rm_lot_no, approved_quantity, approved_by, approved_date, tests) 
         VALUES (?, ?, ?, ?, ?, ?)");
@@ -46,6 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_analysis'])) {
     header("Location: inspect_raw_materials.php");
     exit();
 }
+
 ?>
 <!DOCTYPE html>
 <html lang="en">

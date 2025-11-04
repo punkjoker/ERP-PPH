@@ -247,16 +247,18 @@ else: ?>
         <!-- Delivery Info -->
         <div class="bg-gray-50 p-4 rounded border mt-6">
           <h4 class="font-semibold text-gray-700 mb-2">Delivery Details</h4>
-          <p><b>Company:</b> <?= $delivery['company_name'] ?></p>
-          <p><b>Contact:</b> <?= $delivery['delivery_contact'] ?></p>
-          <p><b>Expected Delivery:</b> <?= $delivery['expected_delivery'] ?></p>
-          <p><b>Delivered Date:</b> <?= $delivery['delivered_date'] ?></p>
-          <p><b>Status:</b> <?= $delivery['status'] ? 'Delivered' : 'Pending' ?></p>
-        </div>
-      <?php else: ?>
-        <div class="p-4 text-gray-600">Purchase Order not found.</div>
-      <?php endif; ?>
+          <?php if ($delivery): ?>
+    <p><b>Company:</b> <?= $delivery['company_name'] ?></p>
+    <p><b>Contact:</b> <?= $delivery['delivery_contact'] ?></p>
+    <p><b>Expected Delivery:</b> <?= $delivery['expected_delivery'] ?></p>
+    <p><b>Delivered Date:</b> <?= $delivery['delivered_date'] ?></p>
+    <p><b>Status:</b> <?= $delivery['status'] ? 'Delivered' : 'Pending' ?></p>
+<?php else: ?>
+    <p class="text-gray-600">No delivery record found for this Purchase Order.</p>
+<?php endif; ?>
+
     </div>
+    <?php endif; ?>
   </div>
 </div>
 </body>

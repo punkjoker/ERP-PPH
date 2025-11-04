@@ -27,4 +27,48 @@
   <div class="mt-auto">
     <a href="logout.php" class="block bg-red-500 hover:bg-red-600 text-white text-center py-2 rounded">Logout</a>
   </div>
+ <script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const sidebar = document.querySelector(".overflow-y-auto");
+
+    // Restore previous scroll position
+    const savedScroll = localStorage.getItem("sidebar-scroll");
+    if (savedScroll) {
+      sidebar.scrollTop = parseInt(savedScroll, 10);
+    }
+
+    // Save scroll position whenever user scrolls
+    sidebar.addEventListener("scroll", function () {
+      localStorage.setItem("sidebar-scroll", sidebar.scrollTop);
+    });
+  });
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const sidebar = document.querySelector(".overflow-y-auto");
+
+  // Restore scroll position
+  const savedScroll = localStorage.getItem("sidebar-scroll");
+  if (savedScroll) sidebar.scrollTop = parseInt(savedScroll, 10);
+
+  sidebar.addEventListener("scroll", function () {
+    localStorage.setItem("sidebar-scroll", sidebar.scrollTop);
+  });
+
+  // Highlight active link
+  const currentPage = window.location.pathname.split("/").pop();
+  const navLinks = document.querySelectorAll("nav a");
+
+  navLinks.forEach(link => {
+    const linkPage = link.getAttribute("href");
+
+    if (linkPage === currentPage) {
+      link.classList.add("bg-blue-500", "text-white", "font-semibold");
+      link.classList.remove("hover:bg-blue-200");
+    } else {
+      link.classList.remove("bg-blue-500", "text-white", "font-semibold");
+    }
+  });
+});
+</script>
 </div>

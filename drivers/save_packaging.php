@@ -30,11 +30,6 @@ $batch_number = $productRow['batch_number'];
 $obtained_yield = $productRow['obtained_yield'];
 $productQuery->close();
 
-// ✅ Initialize
-$first_pack_size = 0;
-$first_unit = "";
-$first_quantity_used = 0;
-
 // ✅ Loop through each packaging material row
 foreach ($_POST['material_id'] as $i => $mat_id) {
     if (empty($mat_id)) continue;
@@ -45,14 +40,8 @@ foreach ($_POST['material_id'] as $i => $mat_id) {
     $unit_cost = floatval($_POST['cost_per_unit'][$i] ?? 0);
     $units = trim($_POST['unit'][$i] ?? '');
     $remarks = trim($_POST['remarks'][$i] ?? '');
+    $quantity_to_pack = floatval($_POST['quantity_to_pack'][$i] ?? 0);
     $total_cost = $qty_used * $unit_cost;
-
-    // Capture first row details
-    if ($i == 0) {
-        $first_pack_size = $pack_size;
-        $first_unit = $units;
-        $first_quantity_used = $qty_used;
-    }
 
     // ✅ Insert into packaging table
     $sql = "INSERT INTO packaging (
@@ -61,23 +50,25 @@ foreach ($_POST['material_id'] as $i => $mat_id) {
                 material_id, 
                 pack_size, 
                 units, 
-                quantity_used, 
+                quantity_used,
+                packaged_quantity, 
                 unpackaged_qty, 
                 cost_per_unit, 
                 total_cost, 
                 remarks, 
                 status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
     
     $stmt = $conn->prepare($sql);
     $stmt->bind_param(
-        "isidsdddds",
+        "isidsddddds",
         $run_id,
         $product_name,
         $mat_id,
         $pack_size,
         $units,
         $qty_used,
+        $quantity_to_pack,
         $unpackaged_qty,
         $unit_cost,
         $total_cost,
@@ -85,25 +76,25 @@ foreach ($_POST['material_id'] as $i => $mat_id) {
     );
     $stmt->execute();
     $stmt->close();
-}
 
-// ✅ Insert into finished_products with the *first* row's quantity_used
-if ($product_name && $batch_number) {
+    // ✅ Insert corresponding record into finished_products
     $insert = $conn->prepare("
         INSERT INTO finished_products 
-        (production_run_id, product_id, product_name, batch_number, obtained_yield, unit, pack_size, remaining_size)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        (production_run_id, product_id, material_id, product_name, batch_number, obtained_yield, unit, pack_size, remaining_size, packaged_quantity)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
     $insert->bind_param(
-        "iissdsdd",
+        "iiissdsddd",
         $run_id,
         $product_id,
+        $mat_id,
         $product_name,
         $batch_number,
         $obtained_yield,
-        $first_unit,
-        $first_pack_size,
-        $first_quantity_used   // ✅ Only from first packaging row
+        $units,
+        $pack_size,
+        $qty_used,
+        $quantity_to_pack
     );
     $insert->execute();
     $insert->close();

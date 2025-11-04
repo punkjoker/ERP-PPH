@@ -28,10 +28,29 @@ $stmt->bind_param("isss", $delivery_id, $remarks, $invoice_number, $delivery_num
             $unit = $_POST['unit'][$i] ?? '';
 
             // Insert order item
-            $stmt = $conn->prepare("INSERT INTO delivery_order_items (order_id, item_name, source_table, item_id, quantity_removed, remaining_quantity, unit) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("issidds", $order_id, $item_name, $source_table, $item_id, $quantity_removed, $remaining_quantity, $unit);
-            $stmt->execute();
-            $stmt->close();
+            $pack_size = floatval($_POST['pack_size'][$i] ?? 0);
+
+$material_name = $_POST['material_name'][$i] ?? '';
+
+$stmt = $conn->prepare("
+    INSERT INTO delivery_order_items 
+    (order_id, item_name, material_name, pack_size, source_table, item_id, quantity_removed, remaining_quantity, unit) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+");
+$stmt->bind_param(
+    "issssddds", 
+    $order_id, 
+    $item_name, 
+    $material_name, 
+    $pack_size, 
+    $source_table, 
+    $item_id, 
+    $quantity_removed, 
+    $remaining_quantity, 
+    $unit
+);
+$stmt->execute();
+$stmt->close();
 
             // Subtract from appropriate source table.
            if ($source_table === 'chemicals_in') {
@@ -214,7 +233,8 @@ $stmt->bind_param("isss", $delivery_id, $remarks, $invoice_number, $delivery_num
         <tr>
           <th class="py-2 px-3 text-left">Item</th>
           <th class="py-2 px-3 text-left">Source</th>
-          <th class="py-2 px-3 text-left">Remaining</th>
+          <th class="py-2 px-3 text-left">Pack Size</th>
+          <th class="py-2 px-3 text-left">Remaining Units</th>
           <th class="py-2 px-3 text-left">Remove Qty</th>
           <th class="py-2 px-3 text-left">Unit</th>
           <th class="py-2 px-3"></th>
@@ -291,6 +311,7 @@ function rowTemplate() {
     <td class="rel">
       <input type="text" name="item_name[]" class="item_search w-full border rounded px-2 py-1" autocomplete="off" />
       <input type="hidden" name="item_id[]" class="item_id" value="" />
+       <input type="hidden" name="material_name[]" class="material_name" value="" /> <!-- ✅ Added -->
       <div class="autocomplete-list suggestions hidden"></div>
     </td>
     <td>
@@ -300,6 +321,7 @@ function rowTemplate() {
         <option value="chemicals_in">Chemicals In</option>
       </select>
     </td>
+     <td><input type="text" name="pack_size[]" readonly class="pack_size w-full border rounded px-2 py-1 text-gray-600"></td> <!-- ✅ new -->
     <td><input type="text" name="remaining_quantity[]" readonly class="remaining_quantity w-full border rounded px-2 py-1 text-gray-600"></td>
     <td><input type="number" name="quantity_removed[]" step="0.01" class="quantity_removed w-full border rounded px-2 py-1"></td>
     <td><input type="text" name="unit[]" readonly class="unit w-full border rounded px-2 py-1 text-gray-600"></td>
@@ -360,9 +382,25 @@ $(document).on('click', '.item-suggestion', function() {
   let $row = $s.closest('td').closest('tr');
   $row.find('.item_search').val($s.data('label'));
   $row.find('.item_id').val($s.data('id'));
-  $row.find('.source_table').val($s.data('source'));
+  let src = ($s.data('source') || '').trim();
+$row.find('.source_table option').each(function() {
+  if ($(this).val() === src) $(this).prop('selected', true);
+});
+console.log("✅ Source set to:", src);
+
   $row.find('.remaining_quantity').val(Number($s.data('remaining')).toFixed(2));
   $row.find('.unit').val($s.data('unit'));
+   $row.find('.material_name').val($s.data('material_name') || '');
+
+  $s.closest('.suggestions').addClass('hidden').empty();
+
+  // ✅ Only populate pack_size if finished_products
+  if ($s.data('source') === 'finished_products') {
+    $row.find('.pack_size').val($s.data('pack_size') || '');
+  } else {
+    $row.find('.pack_size').val('');
+  }
+
   $s.closest('.suggestions').addClass('hidden').empty();
 });
 

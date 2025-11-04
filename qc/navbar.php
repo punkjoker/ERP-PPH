@@ -17,7 +17,9 @@
         <li><a href="inspect_raw_materials.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-vial mr-2"></i>Inspect Chemicals In</a></li>
         <li><a href="inspect_finished_products.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-clipboard-check mr-2"></i>Inspect Finished Products</a></li>
         <li><a href="quality_manager_review.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-user-tie mr-2"></i>Quality Manager Review</a></li>
+<li><a href="rejected_chemicals.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-ban mr-2"></i>Disposeds Chemicals</a></li>
         <li><a href="record_production_run.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-cogs mr-2"></i>View Production Runs</a></li>
+<li><a href="view_finished_products.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-check-double mr-2"></i>View Finished Products</a></li>
         <li><a href="add_department_request.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-plus mr-2"></i>New Item Request</a></li>
         <li><a href="disposables.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-trash-can mr-2"></i>Disposals</a></li>
         <li><a href="qc_reports.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-file-contract mr-2"></i>QC Reports</a></li>
@@ -28,4 +30,48 @@
   <div class="mt-auto">
     <a href="logout.php" class="block bg-red-500 hover:bg-red-600 text-white text-center py-2 rounded">Logout</a>
   </div>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const sidebar = document.querySelector(".overflow-y-auto");
+
+    // Restore previous scroll position
+    const savedScroll = localStorage.getItem("sidebar-scroll");
+    if (savedScroll) {
+      sidebar.scrollTop = parseInt(savedScroll, 10);
+    }
+
+    // Save scroll position whenever user scrolls
+    sidebar.addEventListener("scroll", function () {
+      localStorage.setItem("sidebar-scroll", sidebar.scrollTop);
+    });
+  });
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const sidebar = document.querySelector(".overflow-y-auto");
+
+  // Restore scroll position
+  const savedScroll = localStorage.getItem("sidebar-scroll");
+  if (savedScroll) sidebar.scrollTop = parseInt(savedScroll, 10);
+
+  sidebar.addEventListener("scroll", function () {
+    localStorage.setItem("sidebar-scroll", sidebar.scrollTop);
+  });
+
+  // Highlight active link
+  const currentPage = window.location.pathname.split("/").pop();
+  const navLinks = document.querySelectorAll("nav a");
+
+  navLinks.forEach(link => {
+    const linkPage = link.getAttribute("href");
+
+    if (linkPage === currentPage) {
+      link.classList.add("bg-blue-500", "text-white", "font-semibold");
+      link.classList.remove("hover:bg-blue-200");
+    } else {
+      link.classList.remove("bg-blue-500", "text-white", "font-semibold");
+    }
+  });
+});
+</script>
 </div>

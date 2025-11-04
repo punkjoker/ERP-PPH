@@ -51,6 +51,8 @@
           </a>
         </li>
         <li>
+<li><a href="vehicle_maintenance.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-wrench mr-2"></i>Vehicle Maintenance Costs</a></li>
+        <li><a href="fuel.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-gas-pump mr-2"></i>Fuel Section</a></li>
           <a href="payroll_details.php" class="block hover:bg-blue-200 p-2 rounded">
             <i class="fa-solid fa-file-invoice-dollar mr-2"></i>Payroll Details
           </a>
@@ -63,6 +65,11 @@
         <li>
           <a href="payroll_list.php" class="block hover:bg-blue-200 p-2 rounded">
             <i class="fa-solid fa-wallet mr-2"></i>Process Payroll
+          </a>
+        </li>
+ <li>
+          <a href="all_deductions.php" class="block hover:bg-blue-200 p-2 rounded">
+            <i class="fa-solid fa-wallet mr-2"></i>Deductions reports
           </a>
         </li>
         <li>
@@ -80,4 +87,48 @@
       <i class="fa-solid fa-right-from-bracket mr-2"></i>Logout
     </a>
   </div>
+ <script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const sidebar = document.querySelector(".overflow-y-auto");
+
+    // Restore previous scroll position
+    const savedScroll = localStorage.getItem("sidebar-scroll");
+    if (savedScroll) {
+      sidebar.scrollTop = parseInt(savedScroll, 10);
+    }
+
+    // Save scroll position whenever user scrolls
+    sidebar.addEventListener("scroll", function () {
+      localStorage.setItem("sidebar-scroll", sidebar.scrollTop);
+    });
+  });
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const sidebar = document.querySelector(".overflow-y-auto");
+
+  // Restore scroll position
+  const savedScroll = localStorage.getItem("sidebar-scroll");
+  if (savedScroll) sidebar.scrollTop = parseInt(savedScroll, 10);
+
+  sidebar.addEventListener("scroll", function () {
+    localStorage.setItem("sidebar-scroll", sidebar.scrollTop);
+  });
+
+  // Highlight active link
+  const currentPage = window.location.pathname.split("/").pop();
+  const navLinks = document.querySelectorAll("nav a");
+
+  navLinks.forEach(link => {
+    const linkPage = link.getAttribute("href");
+
+    if (linkPage === currentPage) {
+      link.classList.add("bg-blue-500", "text-white", "font-semibold");
+      link.classList.remove("hover:bg-blue-200");
+    } else {
+      link.classList.remove("bg-blue-500", "text-white", "font-semibold");
+    }
+  });
+});
+</script>
 </div>

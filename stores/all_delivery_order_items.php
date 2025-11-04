@@ -84,43 +84,43 @@ include 'navbar.php';
   $result = $stmt->get_result();
   ?>
 
-  <!-- ✅ Display Table -->
-  <div class="bg-white shadow-md rounded-lg p-6 overflow-x-auto">
-    <table class="min-w-full border border-gray-200">
-      <thead class="bg-blue-600 text-white">
-        <tr>
-          <th class="px-4 py-2 text-left">Company Name</th>
-          <th class="px-4 py-2 text-left">Invoice No.</th>
-          <th class="px-4 py-2 text-left">Delivery No.</th>
-          <th class="px-4 py-2 text-left">Item Name</th>
-          <th class="px-4 py-2 text-left">Source</th>
-          <th class="px-4 py-2 text-right">Quantity</th>
-          <th class="px-4 py-2 text-left">Unit</th>
-          <th class="px-4 py-2 text-left">Delivered On</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php if ($result && $result->num_rows > 0): ?>
-          <?php while ($row = $result->fetch_assoc()): ?>
-            <tr class="border-b hover:bg-gray-50">
-              <td class="px-4 py-2"><?= htmlspecialchars($row['company_name']) ?></td>
-              <td class="px-4 py-2"><?= htmlspecialchars($row['invoice_number']) ?></td>
-              <td class="px-4 py-2"><?= htmlspecialchars($row['delivery_number']) ?></td>
-              <td class="px-4 py-2"><?= htmlspecialchars($row['item_name']) ?></td>
-              <td class="px-4 py-2 capitalize"><?= htmlspecialchars($row['source_table']) ?></td>
-              <td class="px-4 py-2 text-right"><?= number_format($row['quantity_removed'], 2) ?></td>
-              <td class="px-4 py-2"><?= htmlspecialchars($row['unit']) ?></td>
-              <td class="px-4 py-2 text-gray-600"><?= htmlspecialchars($row['created_at']) ?></td>
-            </tr>
-          <?php endwhile; ?>
-        <?php else: ?>
-          <tr>
-            <td colspan="8" class="text-center text-gray-500 py-4">No delivery items found for the selected dates.</td>
+ <!-- ✅ Display Table -->
+<div class="bg-white shadow-md rounded-lg p-6 overflow-x-auto">
+  <table class="min-w-full border border-gray-200 text-sm">
+    <thead class="bg-blue-600 text-white">
+      <tr>
+        <th class="px-3 py-1.5 text-left">Company Name</th>
+        <th class="px-3 py-1.5 text-left">Invoice No.</th>
+        <th class="px-3 py-1.5 text-left">Delivery No.</th>
+        <th class="px-3 py-1.5 text-left">Item Name</th>
+       
+        <th class="px-3 py-1.5 text-right">Quantity</th>
+        <th class="px-3 py-1.5 text-left">Unit</th>
+        <th class="px-3 py-1.5 text-left">Delivered On</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      <?php if ($result && $result->num_rows > 0): ?>
+        <?php while ($row = $result->fetch_assoc()): ?>
+          <tr class="bg-white hover:bg-gray-50 shadow-sm transition-all duration-150">
+            <td class="px-3 py-1"><?= htmlspecialchars($row['company_name']) ?></td>
+            <td class="px-3 py-1"><?= htmlspecialchars($row['invoice_number']) ?></td>
+            <td class="px-3 py-1"><?= htmlspecialchars($row['delivery_number']) ?></td>
+            <td class="px-3 py-1"><?= htmlspecialchars($row['item_name']) ?></td>
+
+            <td class="px-3 py-1 text-right"><?= number_format($row['quantity_removed'], 2) ?></td>
+            <td class="px-3 py-1"><?= htmlspecialchars($row['unit']) ?></td>
+            <td class="px-3 py-1 text-gray-600"><?= htmlspecialchars($row['created_at']) ?></td>
           </tr>
-        <?php endif; ?>
-      </tbody>
-    </table>
-  </div>
+        <?php endwhile; ?>
+      <?php else: ?>
+        <tr>
+          <td colspan="8" class="text-center text-gray-500 py-3">No delivery items found for the selected dates.</td>
+        </tr>
+      <?php endif; ?>
+    </tbody>
+  </table>
+</div>
 </div>
 
 </body>

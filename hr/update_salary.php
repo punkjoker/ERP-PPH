@@ -82,6 +82,7 @@ function addAllowanceRow(name = '', amount = '') {
     row.innerHTML = `
         <input type="text" name="allowance_name[]" value="${name}" placeholder="Allowance Name" class="border px-3 py-2 rounded w-1/2" required>
         <input type="number" name="allowance_amount[]" value="${amount}" placeholder="Amount" step="0.01" class="border px-3 py-2 rounded w-1/2" required>
+        <button type="button" class="bg-red-500 text-white px-3 py-1 rounded" onclick="this.parentElement.remove()">Remove</button>
     `;
     container.appendChild(row);
 }
@@ -99,23 +100,24 @@ function addDeductionRow(selectedId = '') {
             }
             ?>
         </select>
+        <button type="button" class="bg-red-500 text-white px-3 py-1 rounded" onclick="this.parentElement.remove()">Remove</button>
     `;
     container.appendChild(row);
     if (selectedId) row.querySelector("select").value = selectedId;
 }
 
+// Prefill existing allowances/deductions on load
 window.onload = function() {
-    // Prefill allowances
     <?php while ($a = $allowances->fetch_assoc()) { ?>
         addAllowanceRow("<?= htmlspecialchars($a['allowance_name']) ?>", "<?= $a['amount'] ?>");
     <?php } ?>
 
-    // Prefill deductions
     <?php while ($d = $employee_deductions->fetch_assoc()) { ?>
         addDeductionRow("<?= $d['deduction_id'] ?>");
     <?php } ?>
 };
 </script>
+
 </head>
 <body class="bg-gray-100">
 <?php include 'navbar.php'; ?>

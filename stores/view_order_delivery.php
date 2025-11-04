@@ -44,6 +44,12 @@ $linked_orders = $stmt2->get_result();
         <p><strong>Delivery Date:</strong> <?= htmlspecialchars($delivery['delivery_date']) ?></p>
         <p><strong>Status:</strong> <?= htmlspecialchars($delivery['status']) ?></p>
     </div>
+<div class="mb-4">
+    <a href="download_delivery_pdf.php?id=<?= $delivery_id ?>" 
+       class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded inline-block">
+        📥 Download PDF
+    </a>
+</div>
 
     <!-- Linked Delivery Orders -->
     <div class="bg-white shadow-lg rounded-2xl p-6">
@@ -66,10 +72,11 @@ $linked_orders = $stmt2->get_result();
                     while($order = $linked_orders->fetch_assoc()):
                         // Fetch order items
                         $stmt3 = $conn->prepare("
-                            SELECT item_name, quantity_removed, unit 
-                            FROM delivery_order_items 
-                            WHERE order_id = ?
-                        ");
+    SELECT item_name, quantity_removed, unit, material_name, pack_size, source_table
+    FROM delivery_order_items
+    WHERE order_id = ?
+");
+
                         $stmt3->bind_param("i", $order['delivery_order_id']);
                         $stmt3->execute();
                         $items = $stmt3->get_result();
@@ -87,16 +94,31 @@ $linked_orders = $stmt2->get_result();
                         </span>
                     </td>
                     <td class="py-2 px-4 border-b">
-                        <?php if($items->num_rows > 0): ?>
-                        <ul class="list-disc ml-5">
-                            <?php while($it = $items->fetch_assoc()): ?>
-                                <li><?= htmlspecialchars($it['item_name']) ?> - <?= htmlspecialchars($it['quantity_removed']) ?> <?= htmlspecialchars($it['unit']) ?></li>
-                            <?php endwhile; ?>
-                        </ul>
-                        <?php else: ?>
-                            <span class="text-gray-400 text-sm">No items</span>
-                        <?php endif; ?>
-                    </td>
+                        <td class="py-2 px-4 border-b">
+    <?php if($items->num_rows > 0): ?>
+        <ul class="list-disc ml-5">
+            <?php while($it = $items->fetch_assoc()): ?>
+                <?php if ($it['source_table'] === 'finished_products'): ?>
+                    <li>
+                        <?= htmlspecialchars($it['item_name']) ?>, 
+                        <?= htmlspecialchars($it['material_name']) ?><?php if(!empty($it['pack_size'])): ?>, <?= htmlspecialchars($it['pack_size']) ?><?= !empty($it['unit']) ? ' ' . htmlspecialchars($it['unit']) : '' ?><?php endif; ?>, 
+                        <?= number_format($it['quantity_removed'], 0) ?> (pack)
+
+                    </li>
+                <?php else: ?>
+                    <li>
+                        <?= htmlspecialchars($it['item_name']) ?> - 
+                        <?= htmlspecialchars($it['quantity_removed']) ?> 
+                        <?= htmlspecialchars($it['unit']) ?>
+                    </li>
+                <?php endif; ?>
+            <?php endwhile; ?>
+        </ul>
+    <?php else: ?>
+        <span class="text-gray-400 text-sm">No items</span>
+    <?php endif; ?>
+</td>
+
                 </tr>
                 <?php endwhile; else: ?>
                     <tr><td colspan="7" class="text-center py-4 text-gray-500">No linked delivery orders found.</td></tr>

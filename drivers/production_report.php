@@ -124,6 +124,45 @@ while ($row = $result4->fetch_assoc()) {
     $pack_items_qty[] = $row['item_name'] ?: 'Unknown Item';
     $pack_quantities[] = $row['total_quantity_used'];
 }
+// --- Label Cost Chart ---
+$stmt7 = $conn->prepare("
+    SELECT 
+        l.material_name,
+        SUM(l.total_cost) AS total_label_cost,
+        SUM(l.used) AS total_used
+    FROM label_reconciliation l
+    WHERE DATE(l.reconciled_at) BETWEEN ? AND ?
+    GROUP BY l.material_name
+    ORDER BY total_label_cost DESC
+");
+$stmt7->bind_param('ss', $from_date, $to_date);
+$stmt7->execute();
+$result5 = $stmt7->get_result();
+
+$label_items = [];
+$label_costs = [];
+$label_used = [];
+
+while ($row = $result5->fetch_assoc()) {
+    $label_items[] = $row['material_name'] ?: 'Unknown Label';
+    $label_costs[] = $row['total_label_cost'];
+    $label_used[] = $row['total_used'];
+}
+// --- Label Cost Total ---
+$stmt8 = $conn->prepare("
+    SELECT SUM(total_cost) AS label_total
+    FROM label_reconciliation
+    WHERE DATE(reconciled_at) BETWEEN ? AND ?
+");
+$stmt8->bind_param('ss', $from_date, $to_date);
+$stmt8->execute();
+$label_res = $stmt8->get_result()->fetch_assoc();
+$stmt8->close();
+
+$label_total = $label_res['label_total'] ?? 0;
+
+// ✅ Update total production cost to include Label Cost
+$total_production_cost = $bill_total + $pack_total + $label_total;
 
 ?>
 
@@ -165,23 +204,41 @@ while ($row = $result4->fetch_assoc()) {
       </button>
     </form>
 
-    <!-- Summary Section -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-      <div class="bg-white rounded-2xl shadow-lg p-6 text-center">
-        <p class="text-gray-500">Total BOM Cost</p>
-        <h3 class="text-2xl font-semibold text-blue-600"><?= number_format($bill_total, 2) ?> Ksh</h3>
-      </div>
+   <!-- Summary Section -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+  <!-- BOM Cost -->
+  <div class="bg-white rounded-2xl shadow-lg p-6 text-center">
+    <p class="text-gray-500">Total BOM Cost</p>
+    <h3 class="text-2xl font-semibold text-blue-600">
+      <?= number_format($bill_total, 2) ?> Ksh
+    </h3>
+  </div>
 
-      <div class="bg-white rounded-2xl shadow-lg p-6 text-center">
-        <p class="text-gray-500">Total Packaging Cost</p>
-        <h3 class="text-2xl font-semibold text-amber-600"><?= number_format($pack_total, 2) ?> Ksh</h3>
-      </div>
+  <!-- Packaging Cost -->
+  <div class="bg-white rounded-2xl shadow-lg p-6 text-center">
+    <p class="text-gray-500">Total Packaging Cost</p>
+    <h3 class="text-2xl font-semibold text-amber-600">
+      <?= number_format($pack_total, 2) ?> Ksh
+    </h3>
+  </div>
 
-      <div class="bg-white rounded-2xl shadow-lg p-6 text-center">
-        <p class="text-gray-500">Total Production Cost</p>
-        <h3 class="text-2xl font-semibold text-green-600"><?= number_format($total_production_cost, 2) ?> Ksh</h3>
-      </div>
-    </div>
+  <!-- Label Cost -->
+  <div class="bg-white rounded-2xl shadow-lg p-6 text-center">
+    <p class="text-gray-500">Total Label Cost</p>
+    <h3 class="text-2xl font-semibold text-lime-600">
+      <?= number_format($label_total, 2) ?> Ksh
+    </h3>
+  </div>
+
+  <!-- Total Production Cost -->
+  <div class="bg-white rounded-2xl shadow-lg p-6 text-center">
+    <p class="text-gray-500">Total Production Cost (BOM + Packaging + Label)</p>
+    <h3 class="text-2xl font-semibold text-green-700">
+      <?= number_format($total_production_cost, 2) ?> Ksh
+    </h3>
+  </div>
+</div>
+
 
     <!-- Chart Section -->
     <div class="bg-white p-6 rounded-2xl shadow-lg">
@@ -202,6 +259,11 @@ while ($row = $result4->fetch_assoc()) {
 <div class="bg-white p-6 mt-8 rounded-2xl shadow-lg">
   <h3 class="text-xl font-semibold mb-4 text-gray-700">Packaging Quantity Used</h3>
   <canvas id="packQtyChart" height="120"></canvas>
+</div>
+<!-- Label Cost Chart -->
+<div class="bg-white p-6 mt-8 rounded-2xl shadow-lg">
+  <h3 class="text-xl font-semibold mb-4 text-gray-700">Label Cost Distribution</h3>
+  <canvas id="labelChart" height="120"></canvas>
 </div>
 
   </div>
@@ -357,6 +419,55 @@ new Chart(ctxPackQty, {
         backgroundColor: '#1e3a8a',
         titleColor: '#fff',
         bodyColor: '#8cb3dbff',
+      }
+    },
+    scales: {
+      x: { ticks: { color: '#475569' }, grid: { display: false } },
+      y: { 
+        beginAtZero: true, 
+        ticks: { color: '#475569' },
+        grid: { color: '#e2e8f0' }
+      }
+    }
+  }
+});
+</script>
+<script>
+const ctxLabel = document.getElementById('labelChart').getContext('2d');
+const gradientLabel = ctxLabel.createLinearGradient(0, 0, 0, 400);
+gradientLabel.addColorStop(0, 'rgba(132, 204, 22, 0.7)');
+gradientLabel.addColorStop(1, 'rgba(217, 249, 157, 0.4)');
+
+new Chart(ctxLabel, {
+  type: 'bar',
+  data: {
+    labels: <?= json_encode($label_items) ?>,
+    datasets: [{
+      label: 'Label Cost (Ksh)',
+      data: <?= json_encode($label_costs) ?>,
+      backgroundColor: gradientLabel,
+      borderColor: 'rgba(101, 163, 13, 1)',
+      borderWidth: 1,
+      borderRadius: 6,
+      hoverBackgroundColor: 'rgba(132, 204, 22, 0.8)',
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { display: true, position: 'top' },
+      tooltip: {
+        callbacks: {
+          // ✅ Tooltip will show used quantities
+          afterBody: function(context) {
+            const index = context[0].dataIndex;
+            const used = <?= json_encode($label_used) ?>[index];
+            return 'Quantity Used: ' + used;
+          }
+        },
+        backgroundColor: '#365314',
+        titleColor: '#fff',
+        bodyColor: '#eaffd0',
       }
     },
     scales: {

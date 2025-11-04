@@ -2,31 +2,96 @@
 session_start();
 include 'db_con.php';
 
-// Fetch all leave requests with user info
-$leaves = [];
-$sql = "SELECT l.*, u.full_name 
+// --- Fetch filter values ---
+$filter_user = $_GET['user_id'] ?? '';
+$filter_type = $_GET['leave_type'] ?? '';
+$from_date = $_GET['from_date'] ?? '';
+$to_date = $_GET['to_date'] ?? '';
+
+$where = [];
+$params = [];
+$types = "";
+
+// --- Base Query ---
+$sql = "SELECT l.*, u.full_name, u.national_id 
         FROM leaves l
-        JOIN users u ON l.user_id = u.user_id
-        ORDER BY l.start_date DESC";
-$res = $conn->query($sql);
+        JOIN users u ON l.user_id = u.user_id";
+
+
+// --- Apply filters ---
+if ($filter_user) {
+    $where[] = "l.user_id = ?";
+    $params[] = $filter_user;
+    $types .= "i";
+}
+if ($filter_type) {
+    $where[] = "l.leave_type = ?";
+    $params[] = $filter_type;
+    $types .= "s";
+}
+if ($from_date && $to_date) {
+    $where[] = "l.start_date BETWEEN ? AND ?";
+    $params[] = $from_date;
+    $params[] = $to_date;
+    $types .= "ss";
+}
+
+if (!empty($where)) {
+    $sql .= " WHERE " . implode(" AND ", $where);
+}
+
+$sql .= " ORDER BY l.start_date DESC";
+
+// --- Prepare + Execute Query ---
+$stmt = $conn->prepare($sql);
+if (!empty($params)) {
+    $stmt->bind_param($types, ...$params);
+}
+$stmt->execute();
+$res = $stmt->get_result();
+
+$leaves = [];
 while ($row = $res->fetch_assoc()) {
     $leaves[] = $row;
 }
+$stmt->close();
 
-// Handle leave update
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_leave'])) {
-    $leave_id = intval($_POST['leave_id']);
-    $start_date = $_POST['start_date'];
-    $end_date = $_POST['end_date'];
-    $status = $_POST['status'];
+// --- Fetch all users for filter dropdown ---
+$users = $conn->query("SELECT user_id, full_name, national_id FROM users ORDER BY full_name ASC")->fetch_all(MYSQLI_ASSOC);
 
-    $stmt = $conn->prepare("UPDATE leaves SET start_date=?, end_date=?, status=? WHERE leave_id=?");
-    $stmt->bind_param("sssi", $start_date, $end_date, $status, $leave_id);
+// --- Fetch distinct leave types ---
+$types_res = $conn->query("SELECT DISTINCT leave_type FROM leaves ORDER BY leave_type ASC")->fetch_all(MYSQLI_ASSOC);
+
+// --- If a user + type are selected, calculate total + remaining ---
+$summary = [];
+if ($filter_user && $filter_type) {
+    $year = date('Y');
+    $entitlements = [
+        'Annual' => 21,
+        'Sick' => 30,
+        'Paternity' => 14,
+        'Maternity' => 90
+    ];
+    $entitled = $entitlements[$filter_type] ?? 0;
+
+    $stmt = $conn->prepare("
+        SELECT SUM(DATEDIFF(end_date, start_date) + 1) AS taken
+        FROM leaves
+        WHERE user_id = ? AND leave_type = ? AND YEAR(start_date) = ? AND status='Approved'
+    ");
+    $stmt->bind_param("isi", $filter_user, $filter_type, $year);
     $stmt->execute();
+    $resSum = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
-    header("Location: leaves_request.php");
-    exit();
+    $taken = $resSum['taken'] ?? 0;
+    $remaining = max($entitled - $taken, 0);
+
+    $summary = [
+        'entitled' => $entitled,
+        'taken' => $taken,
+        'remaining' => $remaining
+    ];
 }
 ?>
 
@@ -40,39 +105,91 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_leave'])) {
 <body class="bg-gray-100">
 <?php include 'navbar.php'; ?>
 
-<div class="ml-64 p-6 max-w-6xl mx-auto">
+<div class="ml-64 p-6 max-w-7xl mx-auto">
     <h1 class="text-3xl font-bold mb-6 text-blue-700">All Leave Requests</h1>
 
+    <!-- 🔹 FILTER SECTION -->
+    <form method="GET" class="bg-white shadow rounded-lg p-4 mb-6 grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+        <div>
+            <label class="block font-semibold mb-1">From</label>
+            <input type="date" name="from_date" value="<?= htmlspecialchars($from_date) ?>" class="border p-2 rounded w-full">
+        </div>
+        <div>
+            <label class="block font-semibold mb-1">To</label>
+            <input type="date" name="to_date" value="<?= htmlspecialchars($to_date) ?>" class="border p-2 rounded w-full">
+        </div>
+        <div>
+            <label class="block font-semibold mb-1">User</label>
+            <select name="user_id" class="border p-2 rounded w-full">
+                <option value="">All</option>
+                <?php foreach($users as $u): ?>
+                    <option value="<?= $u['user_id'] ?>" <?= ($filter_user==$u['user_id'])?'selected':'' ?>>
+                        <?= htmlspecialchars($u['full_name']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div>
+            <label class="block font-semibold mb-1">Leave Type</label>
+            <select name="leave_type" class="border p-2 rounded w-full">
+                <option value="">All</option>
+                <?php foreach($types_res as $t): ?>
+                    <option value="<?= htmlspecialchars($t['leave_type']) ?>" <?= ($filter_type==$t['leave_type'])?'selected':'' ?>>
+                        <?= htmlspecialchars($t['leave_type']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="flex space-x-2">
+            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 w-full">Filter</button>
+            <a href="leaves_request.php" class="bg-gray-300 px-4 py-2 rounded hover:bg-gray-400 w-full text-center">Reset</a>
+        </div>
+    </form>
+
+    <!-- 🔹 Summary Section -->
+    <?php if (!empty($summary)): ?>
+        <div class="bg-blue-50 border-l-4 border-blue-600 p-4 rounded mb-6">
+            <p class="text-blue-800 font-semibold">
+                <?= htmlspecialchars($users[array_search($filter_user, array_column($users, 'user_id'))]['full_name'] ?? '') ?>'s <?= htmlspecialchars($filter_type) ?> Leave (<?= date('Y') ?>)
+            </p>
+            <p>Entitled: <strong><?= $summary['entitled'] ?></strong> days | Taken: <strong><?= $summary['taken'] ?></strong> days | Remaining: <strong><?= $summary['remaining'] ?></strong> days</p>
+        </div>
+    <?php endif; ?>
+
+    <!-- Leave Table -->
     <div class="bg-white shadow rounded-lg p-6">
-        <table class="w-full border border-gray-300 rounded text-sm">
-            <thead class="bg-gray-200">
-                <tr>
-                    <th>#</th>
-                    <th>User</th>
-                    <th>Type</th>
-                    <th>Description</th>
-                    <th>Start</th>
-                    <th>End</th>
-                    <th>Days</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
+        <table class="w-full border border-gray-300 rounded text-xs">
+    <thead class="bg-gray-200 text-gray-700 uppercase">
+        <tr class="text-center">
+            <th class="px-2 py-1">#</th>
+            <th class="px-2 py-1">Name</th>
+            <th class="px-2 py-1">National ID</th>
+            <th class="px-2 py-1">Type</th>
+            <th class="px-2 py-1">Description</th>
+            <th class="px-2 py-1">Start</th>
+            <th class="px-2 py-1">End</th>
+            <th class="px-2 py-1">Days</th>
+            <th class="px-2 py-1">Status</th>
+            <th class="px-2 py-1">Action</th>
+        </tr>
+    </thead>
+    <tbody class="text-gray-700">
+
             <?php if(!empty($leaves)): $count=1; ?>
                 <?php foreach($leaves as $leave): ?>
                     <tr class="<?= ($count%2==0)?'bg-gray-50':'bg-white' ?> hover:bg-blue-50">
-                        <td class="border px-3 py-2"><?= $count++ ?></td>
-                        <td class="border px-3 py-2"><?= htmlspecialchars($leave['full_name']) ?></td>
-                        <td class="border px-3 py-2"><?= htmlspecialchars($leave['leave_type']) ?></td>
-                        <td class="border px-3 py-2"><?= htmlspecialchars($leave['description']) ?></td>
-                        <td class="border px-3 py-2"><?= htmlspecialchars($leave['start_date']) ?></td>
-                        <td class="border px-3 py-2"><?= htmlspecialchars($leave['end_date']) ?></td>
-                        <td class="border px-3 py-2 text-center font-semibold text-blue-700"><?= $leave['total_days'] ?></td>
-                        <td class="border px-3 py-2 text-center font-semibold <?= $leave['status']=='Approved'?'text-green-600':($leave['status']=='Denied'?'text-red-600':'text-yellow-600') ?>">
+                        <td class="border px-2 py-1"><?= $count++ ?></td>
+                        <td class="border px-2 py-1"><?= htmlspecialchars($leave['full_name']) ?></td>
+                        <td class="border px-2 py-1"><?= htmlspecialchars($leave['national_id']) ?></td>
+                        <td class="border px-2 py-1"><?= htmlspecialchars($leave['leave_type']) ?></td>
+                        <td class="border px-2 py-1"><?= htmlspecialchars($leave['description']) ?></td>
+                        <td class="border px-2 py-1"><?= htmlspecialchars($leave['start_date']) ?></td>
+                        <td class="border px-2 py-1"><?= htmlspecialchars($leave['end_date']) ?></td>
+                        <td class="border px-2 py-1 text-center font-semibold text-blue-700"><?= $leave['total_days'] ?></td>
+                        <td class="border px-2 py-1 text-center font-semibold <?= $leave['status']=='Approved'?'text-green-600':($leave['status']=='Denied'?'text-red-600':'text-yellow-600') ?>">
                             <?= $leave['status'] ?>
                         </td>
-                        <td class="border px-3 py-2 text-center">
+                        <td class="border px-2 py-1 text-center">
                             <button class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
                                     onclick="openModal(<?= $leave['leave_id'] ?>, '<?= $leave['start_date'] ?>', '<?= $leave['end_date'] ?>', '<?= $leave['status'] ?>')">
                                 Update
@@ -88,36 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_leave'])) {
     </div>
 </div>
 
-<!-- Update Modal -->
-<div id="updateModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-    <div class="bg-white rounded-lg p-6 w-96">
-        <h2 class="text-xl font-semibold mb-4 text-blue-700">Update Leave</h2>
-        <form method="POST">
-            <input type="hidden" name="leave_id" id="modal_leave_id">
-            <div class="mb-4">
-                <label class="block mb-1 font-semibold">Start Date</label>
-                <input type="date" name="start_date" id="modal_start_date" required class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-300">
-            </div>
-            <div class="mb-4">
-                <label class="block mb-1 font-semibold">End Date</label>
-                <input type="date" name="end_date" id="modal_end_date" required class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-300">
-            </div>
-            <div class="mb-4">
-                <label class="block mb-1 font-semibold">Status</label>
-                <select name="status" id="modal_status" required class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-300">
-                    <option value="Pending">Pending</option>
-                    <option value="Approved">Approved</option>
-                    <option value="Denied">Denied</option>
-                </select>
-            </div>
-            <div class="flex justify-end space-x-2">
-                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancel</button>
-                <button type="submit" name="update_leave" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Save</button>
-            </div>
-        </form>
-    </div>
-</div>
-
+<!-- Existing modal scripts remain same -->
 <script>
 function openModal(leave_id, start_date, end_date, status) {
     document.getElementById('modal_leave_id').value = leave_id;
@@ -127,7 +215,6 @@ function openModal(leave_id, start_date, end_date, status) {
     document.getElementById('updateModal').classList.remove('hidden');
     document.getElementById('updateModal').classList.add('flex');
 }
-
 function closeModal() {
     document.getElementById('updateModal').classList.remove('flex');
     document.getElementById('updateModal').classList.add('hidden');
