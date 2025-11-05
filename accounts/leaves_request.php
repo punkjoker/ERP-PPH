@@ -13,9 +13,11 @@ $params = [];
 $types = "";
 
 // --- Base Query ---
-$sql = "SELECT l.*, u.full_name, u.national_id 
+$sql = "SELECT l.*, u.full_name, u.national_id
         FROM leaves l
-        JOIN users u ON l.user_id = u.user_id";
+        JOIN users u ON l.user_id = u.user_id
+        JOIN groups g ON u.group_id = g.group_id
+        WHERE g.group_name = 'staff'";
 
 
 // --- Apply filters ---
@@ -37,7 +39,7 @@ if ($from_date && $to_date) {
 }
 
 if (!empty($where)) {
-    $sql .= " WHERE " . implode(" AND ", $where);
+    $sql .= " AND " . implode(" AND ", $where);
 }
 
 $sql .= " ORDER BY l.start_date DESC";
@@ -57,7 +59,14 @@ while ($row = $res->fetch_assoc()) {
 $stmt->close();
 
 // --- Fetch all users for filter dropdown ---
-$users = $conn->query("SELECT user_id, full_name, national_id FROM users ORDER BY full_name ASC")->fetch_all(MYSQLI_ASSOC);
+$users = $conn->query("
+    SELECT u.user_id, u.full_name, u.national_id
+    FROM users u
+    JOIN groups g ON u.group_id = g.group_id
+    WHERE g.group_name = 'Staff'
+    ORDER BY u.full_name ASC
+")->fetch_all(MYSQLI_ASSOC);
+
 
 // --- Fetch distinct leave types ---
 $types_res = $conn->query("SELECT DISTINCT leave_type FROM leaves ORDER BY leave_type ASC")->fetch_all(MYSQLI_ASSOC);
@@ -107,6 +116,12 @@ if ($filter_user && $filter_type) {
 
 <div class="ml-64 p-6 max-w-7xl mx-auto">
     <h1 class="text-3xl font-bold mb-6 text-blue-700">All Leave Requests</h1>
+<div class="flex justify-end mb-4">
+  <a href="download_leaves_requests.php?<?= http_build_query($_GET) ?>"
+     class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+     ⬇️ Download Leave Requests
+  </a>
+</div>
 
     <!-- 🔹 FILTER SECTION -->
     <form method="GET" class="bg-white shadow rounded-lg p-4 mb-6 grid grid-cols-1 md:grid-cols-5 gap-4 items-end">

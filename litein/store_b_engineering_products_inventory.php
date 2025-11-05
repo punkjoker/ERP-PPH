@@ -31,6 +31,12 @@ if (!empty($search)) {
         <?php if (!empty($search)): ?>
             <a href="store_b_engineering_products_inventory.php" class="text-blue-600 underline">Clear</a>
         <?php endif; ?>
+        <a href="download_store_b_engineering_list.php?search=<?= urlencode($_GET['search'] ?? '') ?>" 
+   class="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600" 
+   target="_blank">
+   Download Engineering Products List
+</a>
+
     </form>
 
     <!-- Table -->

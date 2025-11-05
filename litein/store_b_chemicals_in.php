@@ -15,9 +15,10 @@ include 'db_con.php';
 <body class="bg-gray-100">
 <?php include 'navbar.php'; ?>
 
-<div class="ml-64 p-6 max-w-4xl">
+<div class="ml-64 p-6 w-[calc(100%-16rem)]">
     <h2 class="text-xl font-bold mb-4">Store B Chemical Receiving</h2>
 
+    <!-- Entry Form -->
     <form method="POST" action="" class="bg-blue-100 p-4 rounded-lg shadow-md space-y-3 text-sm">
         <div>
             <label class="block font-medium">Chemical Name</label>
@@ -92,60 +93,72 @@ include 'db_con.php';
         <button type="submit" name="submit" class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-sm">Save</button>
     </form>
 
-    <!-- Display Table -->
+    <!-- Filter Section -->
+    <form method="GET" action="" class="bg-gray-100 p-4 mt-6 rounded-lg shadow-md flex items-end gap-4 text-sm">
+        <div>
+            <label class="block font-medium">From Date</label>
+            <input type="date" name="from_date" value="<?= $_GET['from_date'] ?? '' ?>" class="border rounded px-2 py-1">
+        </div>
+        <div>
+            <label class="block font-medium">To Date</label>
+            <input type="date" name="to_date" value="<?= $_GET['to_date'] ?? '' ?>" class="border rounded px-2 py-1">
+        </div>
+        <div>
+            <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">Filter</button>
+            <a href="store_b_chemicals_in.php" class="bg-gray-400 text-white px-3 py-1 rounded hover:bg-gray-500">Reset</a>
+            <a href="download_store_b_chemicals_in.php?from_date=<?= $_GET['from_date'] ?? '' ?>&to_date=<?= $_GET['to_date'] ?? '' ?>"
+               class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded">⬇ Download</a>
+        </div>
+    </form>
+
     <?php
-   if(isset($_POST['submit'])) {
-    $chemical_id = intval($_POST['chemical_id'] ?? 0);
-    $chemical_name = $_POST['chemical_name'] ?? '';
-    $main_category = $_POST['main_category'] ?? '';
-    $group_name = $_POST['group_name'] ?? '';
-    $group_code = $_POST['group_code'] ?? '';
-    $chemical_code = $_POST['chemical_code'] ?? '';
-    $category = $_POST['category'] ?? '';
-    $delivery_number = $_POST['delivery_number'] ?? '';
-    $quantity_received = floatval($_POST['quantity_received'] ?? 0);
-    $remaining_quantity = $quantity_received;
-    $units = $_POST['units'] ?? '';
-    $pack_size = $_POST['pack_size'] ?? '';
-    $unit_cost = floatval($_POST['unit_cost'] ?? 0);
-    $po_number = $_POST['po_number'] ?? '';
-    $received_by = $_POST['received_by'] ?? '';
-    $receiving_date = $_POST['receiving_date'] ?? '';
+    // Save entry
+    if (isset($_POST['submit'])) {
+        $chemical_id = intval($_POST['chemical_id'] ?? 0);
+        $chemical_name = $_POST['chemical_name'] ?? '';
+        $main_category = $_POST['main_category'] ?? '';
+        $group_name = $_POST['group_name'] ?? '';
+        $group_code = $_POST['group_code'] ?? '';
+        $chemical_code = $_POST['chemical_code'] ?? '';
+        $category = $_POST['category'] ?? '';
+        $delivery_number = $_POST['delivery_number'] ?? '';
+        $quantity_received = floatval($_POST['quantity_received'] ?? 0);
+        $remaining_quantity = $quantity_received;
+        $units = $_POST['units'] ?? '';
+        $pack_size = $_POST['pack_size'] ?? '';
+        $unit_cost = floatval($_POST['unit_cost'] ?? 0);
+        $po_number = $_POST['po_number'] ?? '';
+        $received_by = $_POST['received_by'] ?? '';
+        $receiving_date = $_POST['receiving_date'] ?? '';
 
-$stmt = $conn->prepare("INSERT INTO store_b_chemicals_in 
-    (chemical_id, chemical_name, main_category, group_name, group_code, chemical_code, category, delivery_number, remaining_quantity, quantity_received, units, pack_size, unit_cost, po_number, received_by, receiving_date) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-if(!$stmt){
-    echo "<p class='text-red-600 font-semibold mt-2'>Prepare failed: " . htmlspecialchars($conn->error) . "</p>";
-} else {
-    $stmt->bind_param(
-        "isssssssddssdsss",
-        $chemical_id,
-        $chemical_name,
-        $main_category,
-        $group_name,
-        $group_code,
-        $chemical_code,
-        $category,
-        $delivery_number,
-        $quantity_received,
-        $quantity_received,
-        $units,
-        $pack_size,
-        $unit_cost,
-        $po_number,
-        $received_by,
-        $receiving_date
-    );
+        $stmt = $conn->prepare("INSERT INTO store_b_chemicals_in 
+            (chemical_id, chemical_name, main_category, group_name, group_code, chemical_code, category, delivery_number, remaining_quantity, quantity_received, units, pack_size, unit_cost, po_number, received_by, receiving_date) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        if (!$stmt) {
+            echo "<p class='text-red-600 font-semibold mt-2'>Prepare failed: " . htmlspecialchars($conn->error) . "</p>";
+        } else {
+            $stmt->bind_param("isssssssddssdsss",
+                $chemical_id, $chemical_name, $main_category, $group_name, $group_code,
+                $chemical_code, $category, $delivery_number, $quantity_received, $quantity_received,
+                $units, $pack_size, $unit_cost, $po_number, $received_by, $receiving_date
+            );
+            $stmt->execute();
+            $stmt->close();
+            echo "<p class='text-green-600 font-semibold mt-2'>Data saved successfully!</p>";
+        }
+    }
 
-    $stmt->execute();
-    $stmt->close();
-}
-    echo "<p class='text-green-600 font-semibold mt-2'>Data saved successfully!</p>";
-}
+    // Fetch data with optional date filter
+    $query = "SELECT * FROM store_b_chemicals_in WHERE 1";
+    if (!empty($_GET['from_date']) && !empty($_GET['to_date'])) {
+        $from = $_GET['from_date'];
+        $to = $_GET['to_date'];
+        $query .= " AND DATE(receiving_date) BETWEEN '$from' AND '$to'";
+    }
+    $query .= " ORDER BY receiving_date DESC";
+    $result = $conn->query($query);
 
-    $result = $conn->query("SELECT * FROM store_b_chemicals_in ORDER BY created_at DESC");
-    if($result->num_rows > 0) {
+    if ($result->num_rows > 0) {
         echo "<div class='overflow-x-auto mt-4'>
         <table class='min-w-full bg-white rounded-lg shadow-md text-sm'>
         <thead>
@@ -167,7 +180,7 @@ if(!$stmt){
             </tr>
         </thead>
         <tbody>";
-        while($row = $result->fetch_assoc()) {
+        while ($row = $result->fetch_assoc()) {
             echo "<tr class='border-b hover:bg-gray-100'>
                 <td class='px-2 py-1'>{$row['chemical_name']}</td>
                 <td class='px-2 py-1'>{$row['main_category']}</td>
@@ -186,6 +199,8 @@ if(!$stmt){
             </tr>";
         }
         echo "</tbody></table></div>";
+    } else {
+        echo "<p class='mt-4 text-gray-600'>No records found.</p>";
     }
     ?>
 </div>
@@ -205,9 +220,7 @@ $("#chemical_name").autocomplete({
         return false;
     }
 });
-
 </script>
-
 
 </body>
 </html>

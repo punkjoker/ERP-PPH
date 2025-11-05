@@ -44,6 +44,11 @@ $result = $stmt2->get_result();
         <strong>Category:</strong> <?= htmlspecialchars($chemical['category'] ?? '-') ?> |
         <strong>Main Category:</strong> <?= htmlspecialchars($chemical['main_category'] ?? '-') ?> |
         <strong>Chemical Code:</strong> <?= htmlspecialchars($chemical_code) ?>
+        <a href="download_store_b_chemicals_inventory.php?chemical_code=<?= urlencode($chemical_code) ?>" 
+   class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 ml-2">
+   Download Inventory
+</a>
+
     </p>
 
     <div class="overflow-x-auto bg-white rounded-lg shadow-md">

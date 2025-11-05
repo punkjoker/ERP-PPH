@@ -100,6 +100,13 @@ $items_list = $conn->query("SELECT DISTINCT item_name FROM delivery_order_items_
         <div>
             <a href="store_b_order_items.php" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">Reset</a>
         </div>
+        <div>
+    <a href="download_store_b_all_order_items.php?from_date=<?= urlencode($from_date) ?>&to_date=<?= urlencode($to_date) ?>&item_name=<?= urlencode($item_name) ?>"
+       class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow">
+       ⬇ Download 
+    </a>
+</div>
+
     </form>
 
     <!-- 📋 Table -->

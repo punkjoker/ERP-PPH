@@ -2,8 +2,24 @@
 session_start();
 require 'db_con.php';
 
-// Fetch rejected chemicals
-$sql = "SELECT * FROM rejected_chemicals_in ORDER BY date_added DESC";
+// Get filter and search values
+$from_date = $_GET['from_date'] ?? '';
+$to_date = $_GET['to_date'] ?? '';
+$search_name = $_GET['search_name'] ?? '';
+
+// Build query dynamically
+$sql = "SELECT * FROM rejected_chemicals_in WHERE 1=1";
+
+if (!empty($from_date) && !empty($to_date)) {
+    $sql .= " AND date_added BETWEEN '$from_date' AND '$to_date'";
+}
+
+if (!empty($search_name)) {
+    $search_name = $conn->real_escape_string($search_name);
+    $sql .= " AND chemical_name LIKE '%$search_name%'";
+}
+
+$sql .= " ORDER BY date_added DESC";
 $result = $conn->query($sql);
 ?>
 <!DOCTYPE html>
@@ -19,6 +35,33 @@ $result = $conn->query($sql);
 <div class="ml-64 p-8">
   <h1 class="text-3xl font-bold text-red-700 mb-6">Rejected Chemicals</h1>
 
+  <!-- 🔍 Filter Form -->
+  <form method="GET" class="bg-white p-4 shadow-md rounded-lg mb-6 flex flex-wrap items-end gap-4">
+    <div>
+      <label class="block text-sm font-medium text-gray-700">From Date</label>
+      <input type="date" name="from_date" value="<?= htmlspecialchars($from_date) ?>" class="border border-gray-300 rounded p-2">
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700">To Date</label>
+      <input type="date" name="to_date" value="<?= htmlspecialchars($to_date) ?>" class="border border-gray-300 rounded p-2">
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Chemical Name</label>
+      <input type="text" name="search_name" value="<?= htmlspecialchars($search_name) ?>" placeholder="Search chemical..." class="border border-gray-300 rounded p-2">
+    </div>
+
+    <div class="flex items-end gap-2">
+      <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Filter</button>
+
+      <!-- ✅ Download Button -->
+      <a href="download_rejected.php?from_date=<?= urlencode($from_date) ?>&to_date=<?= urlencode($to_date) ?>&search_name=<?= urlencode($search_name) ?>" 
+         class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700" target="_blank">
+         Download PDF
+      </a>
+    </div>
+  </form>
+
+  <!-- 📋 Data Table -->
   <div class="bg-white shadow-md rounded-lg overflow-hidden">
     <table class="w-full text-sm text-left border-collapse">
       <thead class="bg-red-100 text-red-700 uppercase">

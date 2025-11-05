@@ -129,6 +129,11 @@ while ($row = $result->fetch_assoc()) {
       </div>
 
       <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Filter</button>
+      <a href="download_bom_history.php?from_date=<?php echo $_GET['from_date'] ?? ''; ?>&to_date=<?php echo $_GET['to_date'] ?? ''; ?>&chemical_name=<?php echo $_GET['chemical_name'] ?? ''; ?>&rm_lot_no=<?php echo $_GET['rm_lot_no'] ?? ''; ?>"
+   class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+   ⬇ Download Report
+</a>
+
     </form>
 
    <!-- Table -->

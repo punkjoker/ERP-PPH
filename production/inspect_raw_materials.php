@@ -52,6 +52,13 @@ $chemicals = $conn->query($query);
     <div class="flex items-end">
       <button type="submit" class="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700">Filter</button>
     </div>
+    <a 
+    href="download_qcraw_material.php?from_date=<?= urlencode($from_date) ?>&to_date=<?= urlencode($to_date) ?>&search_name=<?= urlencode($search_name) ?>"
+    class="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 ml-2"
+    target="_blank"
+  >
+    Download List
+  </a>
   </form>
 
   <!-- Table -->

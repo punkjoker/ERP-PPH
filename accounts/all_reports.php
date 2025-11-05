@@ -53,8 +53,9 @@ $hr_inactive = $hr_row['inactive_count'] ?? 0;
 $hr_stmt->close();
 
 // ---------- Production: BOM + Packaging totals (same logic used earlier) ----------
+// ---------- Production: BOM + Packaging + Label totals (updated logic) ----------
 $bill_stmt = $conn->prepare("
-    SELECT IFNULL(SUM(i.total_cost),0) AS total_bom_cost
+    SELECT IFNULL(SUM(i.total_cost), 0) AS total_bom_cost
     FROM bill_of_material_items i
     JOIN bill_of_materials b ON i.bom_id = b.id
     WHERE b.bom_date BETWEEN ? AND ?
@@ -64,18 +65,32 @@ $bill_stmt->execute();
 $bill_total = $bill_stmt->get_result()->fetch_assoc()['total_bom_cost'] ?? 0;
 $bill_stmt->close();
 
+// ✅ Packaging cost — from `packaging` table joined to `production_runs`
 $pack_stmt = $conn->prepare("
-    SELECT IFNULL(SUM(p.total_cost),0) AS total_pack_cost
-    FROM packaging_reconciliation p
-    JOIN qc_inspections q ON p.qc_inspection_id = q.id
-    WHERE q.created_at BETWEEN ? AND ?
+    SELECT IFNULL(SUM(p.total_cost), 0) AS total_pack_cost
+    FROM packaging p
+    JOIN production_runs r ON p.production_run_id = r.id
+    WHERE DATE(p.packaging_date) BETWEEN ? AND ?
 ");
 $pack_stmt->bind_param('ss', $from_date, $to_date);
 $pack_stmt->execute();
 $pack_total = $pack_stmt->get_result()->fetch_assoc()['total_pack_cost'] ?? 0;
 $pack_stmt->close();
 
-$total_production_cost = floatval($bill_total) + floatval($pack_total);
+// ✅ Label cost — from `label_reconciliation` table
+$label_stmt = $conn->prepare("
+    SELECT IFNULL(SUM(total_cost), 0) AS total_label_cost
+    FROM label_reconciliation
+    WHERE DATE(reconciled_at) BETWEEN ? AND ?
+");
+$label_stmt->bind_param('ss', $from_date, $to_date);
+$label_stmt->execute();
+$label_total = $label_stmt->get_result()->fetch_assoc()['total_label_cost'] ?? 0;
+$label_stmt->close();
+
+// ✅ Total production cost = BOM + Packaging + Label
+$total_production_cost = floatval($bill_total) + floatval($pack_total) + floatval($label_total);
+
 
 // Production: chemical cost distribution (names & costs)
 $chem_dist_stmt = $conn->prepare("
@@ -408,6 +423,10 @@ $total_hr_expenses = $breakfast_total + $lunch_total + $other_expenses_total;
             <p class="small-stat">Packaging</p>
             <p class="text-xl font-semibold text-amber-600"><?= number_format($pack_total,2) ?> Ksh</p>
           </div>
+          <div class="text-center">
+    <p class="small-stat">Label</p>
+    <p class="text-xl font-semibold text-purple-600"><?= number_format($label_total,2) ?> Ksh</p>
+  </div>
           <div class="text-center">
             <p class="small-stat">Total Production</p>
             <p class="text-xl font-semibold text-green-600"><?= number_format($total_production_cost,2) ?> Ksh</p>

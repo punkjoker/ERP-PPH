@@ -40,6 +40,19 @@ $batches = $conn->query("
   <?php include 'navbar.php'; ?>
   <div class="p-6 ml-64">
     <h2 class="text-2xl font-bold mb-4 text-gray-800">Batches for <?= htmlspecialchars($productName); ?></h2>
+    <div class="flex gap-3 mb-4">
+    <a href="products_inventory.php" 
+       class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition">
+       ← Back 
+    </a>
+
+    <a href="download_packaging_batches.php?product_id=<?= $product_id ?>" 
+       class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow transition"
+       target="_blank">
+       ⬇ Download Report
+    </a>
+</div>
+
     <div class="bg-white shadow rounded-lg overflow-hidden">
   <table class="min-w-full border-collapse">
     <thead class="bg-blue-600 text-white text-sm">

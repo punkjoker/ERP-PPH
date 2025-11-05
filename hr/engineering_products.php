@@ -45,6 +45,11 @@ $products = $result->fetch_all(MYSQLI_ASSOC);
                 placeholder="Search by name or code..." 
                 class="border border-gray-300 rounded px-3 py-2 text-sm w-64 focus:ring focus:ring-blue-200"
             >
+            <a href="download_engineering_inventory.php" 
+   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow">
+   ⬇ Download Report
+</a>
+
         </div>
 
         <div class="overflow-x-auto">

@@ -46,6 +46,7 @@ $result = $conn->query($query);
   <div class="p-6 ml-64">
     <div class="max-w-7xl mx-auto bg-white p-6 rounded-lg shadow-lg">
       <h2 class="text-2xl font-bold mb-4 text-gray-800">Production Runs</h2>
+      
 
       <!-- Filter Form -->
       <form method="GET" class="flex flex-wrap items-end gap-4 mb-6">
@@ -71,6 +72,11 @@ $result = $conn->query($query);
           <button type="submit" 
                   class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition mt-2">Filter</button>
         </div>
+        <a href="download_in_production.php?from_date=<?= $from_date ?>&to_date=<?= $to_date ?>&status=<?= $status_filter ?>"
+   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
+   Download CSV
+</a>
+
       </form>
 
       <!-- Table -->

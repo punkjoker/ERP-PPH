@@ -90,6 +90,13 @@ $trainings = $result->fetch_all(MYSQLI_ASSOC);
     <!-- Trainings List -->
     <div class="bg-white shadow rounded-lg p-6">
         <h2 class="text-xl font-semibold mb-4 text-blue-700">Training Records</h2>
+        <div class="flex justify-end mb-4">
+  <a href="download_training_records.php"
+     class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+     ⬇️ Download Training Records
+  </a>
+</div>
+
         <table class="w-full border border-gray-300 rounded">
             <thead class="bg-gray-200">
                 <tr>

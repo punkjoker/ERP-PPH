@@ -121,9 +121,11 @@ $stmt->close();
                 <a href="engineering_products.php" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded">
                     Back
                 </a>
-                <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded">
-                    Print
-                </button>
+               <a href="download_engineering_lots.php?code=<?= urlencode($chemical['chemical_code']) ?>" 
+   class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded">
+   ⬇ Download 
+</a>
+
             </div>
 
         </div>

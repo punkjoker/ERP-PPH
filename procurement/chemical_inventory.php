@@ -63,6 +63,11 @@ $chemicals = $result->fetch_all(MYSQLI_ASSOC);
                 placeholder="Search by name or code..." 
                 class="border border-gray-300 rounded px-3 py-2 text-sm w-64 focus:ring focus:ring-blue-200"
             >
+            <!-- ⬇️ Download button -->
+        <a href="download_all_chemicals_inventory.php" 
+           class="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded shadow">
+            ⬇️ Download
+        </a>
         </div>
 
         <div class="overflow-x-auto">

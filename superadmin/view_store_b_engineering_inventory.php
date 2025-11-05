@@ -44,6 +44,11 @@ $result = $stmt2->get_result();
         <strong>Category:</strong> <?= htmlspecialchars($product['category'] ?? '-') ?> |
         <strong>Main Category:</strong> <?= htmlspecialchars($product['main_category'] ?? '-') ?> |
         <strong>Product Code:</strong> <?= htmlspecialchars($product_code) ?>
+        <a href="download_store_b_engineering_lots.php?product_code=<?= urlencode($product_code) ?>" 
+   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow">
+   Download Inventory
+</a>
+
     </p>
 
     <div class="overflow-x-auto bg-white rounded-lg shadow-md">

@@ -150,6 +150,13 @@ $chemicals = $conn->query($query);
     <div>
       <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Filter</button>
     </div>
+    <a href="download_chemicals_list.php" 
+       class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded flex items-center gap-1">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 12l-4-4m4 4l4-4m-9 8h10" />
+      </svg>
+      Download
+    </a>
   </form>
 
   <!-- ✅ Chemicals Table -->

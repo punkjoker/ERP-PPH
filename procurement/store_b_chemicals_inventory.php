@@ -31,6 +31,11 @@ if(!empty($search)) {
         <?php if(!empty($search)): ?>
             <a href="store_b_chemicals_inventory.php" class="text-blue-600 underline">Clear</a>
         <?php endif; ?>
+        <!-- ✅ Download Button -->
+        <a href="download_store_b_all_chemicals_inventory.php<?= !empty($search) ? '?search=' . urlencode($search) : '' ?>" 
+           class="ml-auto bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded shadow">
+            📥 Download Inventory
+        </a>
     </form>
 
     <div class="overflow-x-auto bg-white rounded-lg shadow-md">

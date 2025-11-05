@@ -92,6 +92,13 @@ if ($search !== '') {
         <!-- Products List -->
 <div class="bg-white shadow-lg rounded p-6">
   <h2 class="text-xl font-semibold mb-3 text-blue-700">Products List</h2>
+  <div class="flex justify-end mb-4">
+  <a href="download_product_list.php"
+     class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition">
+     ⬇️ Download Product List
+  </a>
+</div>
+
   <table class="w-full border border-gray-200 rounded overflow-hidden">
     <thead class="bg-gray-100 text-gray-700 text-sm uppercase">
       <tr>

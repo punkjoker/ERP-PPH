@@ -21,6 +21,11 @@ include 'db_con.php';
             class="border p-2 rounded focus:ring-2 focus:ring-blue-300 w-64">
         <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">Search</button>
         <a href="view_employees.php" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition">Reset</a>
+        <a href="download_employee_list.php" 
+   class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition">
+   ⬇️ Download Active Employees
+</a>
+
     </form>
 
     <?php

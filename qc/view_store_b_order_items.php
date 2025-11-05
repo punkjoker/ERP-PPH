@@ -29,6 +29,11 @@ $items = $conn->query("SELECT * FROM delivery_order_items_store_b WHERE order_id
     <p><strong>Delivery #:</strong> <?= htmlspecialchars($order['delivery_number']) ?></p>
     <p><strong>Status:</strong> <?= htmlspecialchars($order['original_status']) ?></p>
     <p><strong>Remarks:</strong> <?= nl2br(htmlspecialchars($order['remarks'])) ?></p>
+    <a href="download_store_b_order_items.php?id=<?= urlencode($order['id']) ?>" 
+   class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded shadow ml-3">
+   ⬇ Download
+</a>
+
   </div>
 
   <div class="bg-white p-6 rounded shadow-md">

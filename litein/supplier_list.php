@@ -3,34 +3,62 @@ include 'db_con.php';
 
 
 // Fetch procurement products
-$products = $conn->query("SELECT id, product_name FROM procurement_products");
+$products = $conn->query("
+    SELECT id, product_name AS name, 'procurement' AS source FROM procurement_products
+    UNION
+    SELECT id, chemical_name AS name, 'chemical' AS source FROM chemical_names
+    ORDER BY name ASC
+");
+
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    // If product_id is empty string, set it to null
-    $product_id = !empty($_POST['product_id']) ? intval($_POST['product_id']) : null;
-    $manual_product = !empty($_POST['manual_product']) ? $_POST['manual_product'] : null;
+    $product_source = $_POST['product_id'] ?? '';
+    $product_id = null;
+    $chemical_id = null;
+    $manual_product = $_POST['manual_product'] ?? null;
+
+    if (!empty($product_source)) {
+        // Check if it's a chemical or procurement item
+        if (strpos($product_source, 'chemical_') === 0) {
+            $chemical_id = intval(str_replace('chemical_', '', $product_source));
+            
+            // ✅ Get chemical name to store in manual_product
+            $res = $conn->query("SELECT chemical_name FROM chemical_names WHERE id = $chemical_id");
+            if ($res && $row = $res->fetch_assoc()) {
+                $manual_product = $row['chemical_name'];
+            }
+
+        } elseif (strpos($product_source, 'procurement_') === 0) {
+            $product_id = intval(str_replace('procurement_', '', $product_source));
+
+            // ✅ Get procurement product name to store in manual_product
+            $res = $conn->query("SELECT product_name FROM procurement_products WHERE id = $product_id");
+            if ($res && $row = $res->fetch_assoc()) {
+                $manual_product = $row['product_name'];
+            }
+        }
+    }
+
     $type_model_brand = $_POST['type_model_brand'] ?? null;
     $quantity = !empty($_POST['quantity']) ? intval($_POST['quantity']) : null;
     $user_of_product = $_POST['user_of_product'] ?? null;
-
     $supplier_name = $_POST['supplier_name'] ?? null;
     $supplier_contact = $_POST['supplier_contact'] ?? null;
     $price = !empty($_POST['price']) ? floatval($_POST['price']) : null;
     $payment_terms = $_POST['payment_terms'] ?? null;
     $status = $_POST['status'] ?? 'initial';
 
-    // Prepare insert query
+    // ✅ Insert all details
     $stmt = $conn->prepare("INSERT INTO suppliers 
-        (product_id, manual_product, type_model_brand, quantity, user_of_product, 
+        (product_id, chemical_id, manual_product, type_model_brand, quantity, user_of_product, 
          supplier_name, supplier_contact, price, payment_terms, status) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
-    // Bind parameters
-    // i = int, s = string, d = decimal
     $stmt->bind_param(
-        "ississsdss",
+        "iississsdss",
         $product_id,
+        $chemical_id,
         $manual_product,
         $type_model_brand,
         $quantity,
@@ -47,7 +75,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-// Filter suppliers by product
 // Filter suppliers by product
 $filter_product = $_GET['filter_product'] ?? '';
 
@@ -79,6 +106,8 @@ $suppliers = $conn->query("
     SELECT s.*, p.product_name 
     FROM suppliers s 
     LEFT JOIN procurement_products p ON s.product_id = p.id
+LEFT JOIN chemical_names c ON s.chemical_id = c.id
+
     $where
 ");
 
@@ -90,6 +119,29 @@ $suppliers = $conn->query("
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- jQuery (required for Select2) -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<!-- Select2 CSS & JS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<style>
+/* Optional: make it blend nicely with Tailwind */
+.select2-container .select2-selection--single {
+  height: 2.5rem !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 0.375rem !important;
+  padding: 0.25rem 0.5rem;
+}
+.select2-selection__rendered {
+  line-height: 2rem !important;
+}
+.select2-selection__arrow {
+  height: 2rem !important;
+}
+</style>
+
   <title>Supplier List</title>
 </head>
 <body class="bg-gray-50">
@@ -117,12 +169,16 @@ $suppliers = $conn->query("
         <div class="grid grid-cols-2 gap-4">
             <div>
                 <label class="block text-sm">Select Product</label>
-                <select name="product_id" class="w-full border rounded p-2">
-                    <option value="">-- Select Product --</option>
-                    <?php while($row = $products->fetch_assoc()): ?>
-                        <option value="<?= $row['id'] ?>"><?= $row['product_name'] ?></option>
-                    <?php endwhile; ?>
-                </select>
+<select id="productSelect" name="product_id" class="w-full border rounded p-2">
+    <option value="">-- Select Product --</option>
+    <?php while($row = $products->fetch_assoc()): ?>
+        <option value="<?= $row['source'] . '_' . $row['id'] ?>">
+            <?= htmlspecialchars($row['name']) ?> 
+            (<?= $row['source'] === 'chemical' ? 'Inventory' : ucfirst($row['source']) ?>)
+        </option>
+    <?php endwhile; ?>
+</select>
+
             </div>
             <div>
                 <label class="block text-sm">Or Enter Product Name</label>
@@ -278,4 +334,13 @@ function openEditModal(id) {
 function closeModal(id) {
     document.getElementById(id).classList.add('hidden');
 }
+</script>
+<script>
+$(document).ready(function() {
+    $('#productSelect').select2({
+        placeholder: "-- Select or Search Product --",
+        allowClear: true,
+        width: '100%'
+    });
+});
 </script>

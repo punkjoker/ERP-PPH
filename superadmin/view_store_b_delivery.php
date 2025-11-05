@@ -54,6 +54,11 @@ $orders = $stmt2->get_result();
          class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition">
          ← Back to Deliveries
       </a>
+      <a href="download_store_b_delivery_details.php?id=<?= urlencode($delivery_id) ?>" 
+   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md shadow transition">
+   ⬇ Download Delivery Details
+</a>
+
     </div>
 
     <!-- Delivery Info -->
@@ -75,48 +80,68 @@ $orders = $stmt2->get_result();
     </div>
 
     <!-- Linked Orders -->
-    <div class="bg-white shadow-lg rounded-2xl p-6">
-      <h3 class="text-xl font-semibold text-gray-700 mb-4">📦 Linked Orders</h3>
+   <div class="bg-white shadow-lg rounded-2xl p-6">
+  <h3 class="text-xl font-semibold text-gray-700 mb-4">📦 Linked Orders and Their Items</h3>
 
-      <?php if ($orders->num_rows > 0): ?>
-      <div class="overflow-x-auto">
-        <table class="min-w-full border border-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="py-2 px-4 border-b text-left">#</th>
-              <th class="py-2 px-4 border-b text-left">Destination</th>
-              <th class="py-2 px-4 border-b text-left">Company</th>
-              <th class="py-2 px-4 border-b text-left">Invoice No</th>
-              <th class="py-2 px-4 border-b text-left">Delivery No</th>
-              <th class="py-2 px-4 border-b text-left">Remarks</th>
-              <th class="py-2 px-4 border-b text-left">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php $count = 1; while ($o = $orders->fetch_assoc()): ?>
-            <tr class="hover:bg-gray-50">
-              <td class="py-2 px-4 border-b"><?= $count++ ?></td>
-              <td class="py-2 px-4 border-b"><?= htmlspecialchars($o['destination']) ?></td>
-              <td class="py-2 px-4 border-b"><?= htmlspecialchars($o['company_name']) ?></td>
-              <td class="py-2 px-4 border-b"><?= htmlspecialchars($o['invoice_number']) ?></td>
-              <td class="py-2 px-4 border-b"><?= htmlspecialchars($o['delivery_number']) ?></td>
-              <td class="py-2 px-4 border-b"><?= htmlspecialchars($o['remarks'] ?? '-') ?></td>
-              <td class="py-2 px-4 border-b">
-                <span class="px-3 py-1 rounded-full text-sm 
-                  <?= $o['original_status'] === 'Pending' ? 'bg-yellow-100 text-yellow-700' :
-                     ($o['original_status'] === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700') ?>">
-                  <?= htmlspecialchars($o['original_status']) ?>
-                </span>
-              </td>
-            </tr>
-            <?php endwhile; ?>
-          </tbody>
-        </table>
+  <?php if ($orders->num_rows > 0): ?>
+    <?php $count = 1; while ($o = $orders->fetch_assoc()): ?>
+      <div class="mb-8 border border-gray-200 rounded-lg p-4 bg-gray-50">
+        <div class="flex justify-between items-center mb-2">
+          <h4 class="text-lg font-semibold text-gray-800">
+            <?= $count++ ?>. <?= htmlspecialchars($o['company_name']) ?>  
+            <span class="text-sm text-gray-500">(Invoice: <?= htmlspecialchars($o['invoice_number']) ?>)</span>
+          </h4>
+          <span class="px-3 py-1 rounded-full text-sm 
+            <?= $o['original_status'] === 'Pending' ? 'bg-yellow-100 text-yellow-700' :
+               ($o['original_status'] === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700') ?>">
+            <?= htmlspecialchars($o['original_status']) ?>
+          </span>
+        </div>
+        <p class="text-sm text-gray-600 mb-2">Delivery #: <?= htmlspecialchars($o['delivery_number']) ?> | Destination: <?= htmlspecialchars($o['destination']) ?></p>
+        <p class="text-gray-500 italic mb-3"><?= htmlspecialchars($o['remarks'] ?? '-') ?></p>
+
+        <?php
+          $order_items = $conn->prepare("SELECT item_name, pack_size, quantity_removed, unit 
+                                         FROM delivery_order_items_store_b 
+                                         WHERE order_id = ?");
+          $order_items->bind_param('i', $o['order_id']);
+          $order_items->execute();
+          $result_items = $order_items->get_result();
+        ?>
+
+        <?php if ($result_items->num_rows > 0): ?>
+          <div class="overflow-x-auto">
+            <table class="min-w-full border border-gray-200 text-sm">
+              <thead class="bg-gray-100">
+                <tr>
+                  <th class="py-2 px-3 text-left border-b">Item Name</th>
+                  <th class="py-2 px-3 text-left border-b">Pack Size</th>
+                  <th class="py-2 px-3 text-left border-b">Qty Removed</th>
+                  <th class="py-2 px-3 text-left border-b">Unit</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php while ($it = $result_items->fetch_assoc()): ?>
+                  <tr class="hover:bg-white">
+                    <td class="py-2 px-3 border-b"><?= htmlspecialchars($it['item_name']) ?></td>
+                    <td class="py-2 px-3 border-b"><?= htmlspecialchars($it['pack_size']) ?></td>
+                    <td class="py-2 px-3 border-b"><?= (int)$it['quantity_removed'] ?></td>
+                    <td class="py-2 px-3 border-b"><?= htmlspecialchars($it['unit']) ?></td>
+                  </tr>
+                <?php endwhile; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php else: ?>
+          <p class="text-gray-500 italic ml-3">No items found for this order.</p>
+        <?php endif; ?>
       </div>
-      <?php else: ?>
-        <p class="text-gray-500 text-center py-4">No orders linked to this delivery batch yet.</p>
-      <?php endif; ?>
-    </div>
+    <?php endwhile; ?>
+  <?php else: ?>
+    <p class="text-gray-500 text-center py-4">No orders linked to this delivery batch yet.</p>
+  <?php endif; ?>
+</div>
+
   </div>
 </body>
 </html>

@@ -134,6 +134,13 @@ $chemicals = $result->fetch_all(MYSQLI_ASSOC);
                 placeholder="Search by name, code, or group..." 
                 class="border border-gray-300 rounded px-3 py-2 text-sm w-64 focus:ring focus:ring-blue-200"
             >
+             <!-- 📥 Download PDF Button -->
+        <a 
+            href="download_inventory_list.php" 
+            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow-md transition"
+        >
+            📄 Download list
+        </a>
         </div>
 
         <div class="overflow-x-auto">

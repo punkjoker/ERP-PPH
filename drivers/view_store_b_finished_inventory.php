@@ -40,6 +40,11 @@ $result = $stmt->get_result();
             <strong>Product:</strong> <?= htmlspecialchars($product['product_name']) ?><br>
             <strong>Category:</strong> <?= htmlspecialchars($product['category']) ?><br>
             <strong>Product Code:</strong> <?= htmlspecialchars($product_code) ?>
+            <a href="download_store_b_all_finished_inventory.php?product_code=<?= urlencode($product_code) ?>" 
+   class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded ml-3 shadow">
+   ⬇ Download Inventory 
+</a>
+
         </p>
     <?php endif; ?>
 

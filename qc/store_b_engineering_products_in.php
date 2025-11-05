@@ -15,7 +15,8 @@ include 'db_con.php';
 <body class="bg-gray-100">
 <?php include 'navbar.php'; ?>
 
-<div class="ml-64 p-6 max-w-4xl">
+<div class="ml-64 p-6 w-[calc(100%-16rem)]"> <!-- full width minus sidebar width -->
+
     <h2 class="text-xl font-bold mb-4">Store B Engineering Products Receiving</h2>
 
     <form method="POST" action="" class="bg-blue-100 p-4 rounded-lg shadow-md space-y-3 text-sm">
@@ -134,8 +135,37 @@ if(isset($_POST['submit'])) {
         echo "<p class='text-red-600 font-semibold mt-2'>Prepare error: " . htmlspecialchars($conn->error) . "</p>";
     }
 }
+?>
+<!-- Filter Section -->
+<form method="GET" action="" class="mt-6 flex items-center space-x-3 bg-gray-100 p-3 rounded shadow-sm text-sm">
+    <label>From:</label>
+    <input type="date" name="from_date" value="<?= htmlspecialchars($_GET['from_date'] ?? '') ?>" class="border rounded p-1">
+    
+    <label>To:</label>
+    <input type="date" name="to_date" value="<?= htmlspecialchars($_GET['to_date'] ?? '') ?>" class="border rounded p-1">
+    
+    <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">Filter</button>
 
-$result = $conn->query("SELECT * FROM store_b_engineering_products_in ORDER BY created_at DESC");
+    <a href="download_store_b_engineering.php?from_date=<?= urlencode($_GET['from_date'] ?? '') ?>&to_date=<?= urlencode($_GET['to_date'] ?? '') ?>" 
+       class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">
+        Download PDF
+    </a>
+
+    <?php if (!empty($_GET['from_date']) || !empty($_GET['to_date'])): ?>
+        <a href="store_b_engineering_products_in.php" class="text-blue-600 underline">Clear</a>
+    <?php endif; ?>
+</form>
+
+<?php
+$where = "";
+if (!empty($_GET['from_date']) && !empty($_GET['to_date'])) {
+    $from = $conn->real_escape_string($_GET['from_date']);
+    $to = $conn->real_escape_string($_GET['to_date']);
+    $where = "WHERE receiving_date BETWEEN '$from' AND '$to'";
+}
+
+$result = $conn->query("SELECT * FROM store_b_engineering_products_in $where ORDER BY receiving_date DESC");
+
 if($result->num_rows > 0) {
     echo "<div class='overflow-x-auto mt-4'>
     <table class='min-w-full bg-white rounded-lg shadow-md text-sm'>

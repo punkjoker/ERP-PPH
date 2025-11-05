@@ -185,6 +185,14 @@ $materials = $conn->query($query);
     <div>
       <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Filter</button>
     </div>
+    <a 
+  href="download_materials_list.php?from_date=<?= urlencode($from_date) ?>&to_date=<?= urlencode($to_date) ?>&search_name=<?= urlencode($search_name) ?>"
+  class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+  target="_blank"
+>
+  Download PDF
+</a>
+
   </form>
 
   <!-- ✅ Materials Table -->
