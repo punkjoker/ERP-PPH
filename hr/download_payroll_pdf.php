@@ -35,7 +35,7 @@ $pdf->AddPage();
 // --- Header with logo ---
 $pdf->Image('images/lynn_logo.png', 10, 8, 30); // X, Y, Width
 $pdf->SetFont('Arial', 'B', 18);
-$pdf->Cell(0, 10, 'LYNNTECH CHEMICALS $ EQUIPEMENT LRD', 0, 1, 'C');
+$pdf->Cell(0, 10, 'LYNNTECH CHEMICALS $ EQUIPMENT LTD', 0, 1, 'C');
 $pdf->SetFont('Arial', '', 12);
 $pdf->Cell(0, 6, 'Employee Payslip', 0, 1, 'C');
 $pdf->Ln(10);
