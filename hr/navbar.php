@@ -340,6 +340,10 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <span>Leave Requests</span>
         </a>
 
+        <a href="admin_field_schedule_report.php" class="hr-nav-link">
+            <i class="fa-solid fa-calendar-days"></i>
+            <span>Field Schedule</span>
+
         <a href="view_training_requests.php" class="hr-nav-link">
             <i class="fa-solid fa-graduation-cap"></i>
             <span>Training Requests</span>
@@ -366,6 +370,18 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         <a href="all_daily_reports.php" class="hr-nav-link">
             <i class="fa-solid fa-file-lines"></i>
             <span>Daily Reports</span>
+        </a>
+        <a href="admin_production_report.php" class="hr-nav-link">
+            <i class="fa-solid fa-file-lines"></i>
+            <span>Production Daily Reports</span>
+        </a>
+        <a href="admin_purchasing_report.php" class="hr-nav-link">
+            <i class="fa-solid fa-file-lines"></i>
+            <span>Purchasing Daily Reports</span>
+        </a>
+        <a href="admin_sales_report.php" class="hr-nav-link">
+            <i class="fa-solid fa-file-lines"></i>
+            <span>Sales Daily Reports</span>
         </a>
 
         <a href="view_all_evaluations.php" class="hr-nav-link">
@@ -438,6 +454,18 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <i class="fa-solid fa-chart-column"></i>
             <span>HR Reports</span>
         </a>
+        <div>
+      <h3 class="text-blue-700 font-semibold uppercase">Drivers</h3>
+      <ul class="ml-4 space-y-2 text-sm">
+        <li><a href="add_vehicle.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-car mr-2"></i>Manage Vehicles</a></li>
+
+        <li><a href="manage_trips.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-route mr-2"></i>Manage Trips</a></li>
+        <li><a href="vehicle_maintenance.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-wrench mr-2"></i>Vehicle Maintenance Costs</a></li>
+        <li><a href="fuel.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-gas-pump mr-2"></i>Fuel Section</a></li>
+        
+        <li><a href="vehicle_reports.php" class="block hover:bg-blue-200 p-2 rounded"><i class="fa-solid fa-chart-area mr-2"></i>Vehicles Report</a></li>
+      </ul>
+    </div>
 
     </nav>
 

@@ -39,8 +39,37 @@
             <i class="fa-solid fa-graduation-cap mr-2 text-blue-600"></i>Daily Reports
           </a>
         </li>
-      
         <li>
+          <a href="production_daily_report.php" class="block hover:bg-blue-200 p-2 rounded">
+            <i class="fa-solid fa-graduation-cap mr-2 text-blue-600"></i>Production Daily Reports
+          </a>
+        </li>
+        <li>
+
+        <li>
+          <a href="purchasing_daily_report.php" class="block hover:bg-blue-200 p-2 rounded">
+            <i class="fa-solid fa-graduation-cap mr-2 text-blue-600"></i>Purchasing Daily Reports
+        </a>
+        </li>
+        <li>
+          <a href="sales_daily_report.php" class="block hover:bg-blue-200 p-2 rounded">
+            <i class="fa-solid fa-graduation-cap mr-2 text-blue-600"></i>Sales Daily Reports
+        </a>
+        </li>
+
+        <li>
+          <a href="manage_trips.php" class="block hover:bg-blue-200 p-2 rounded">
+            <i class="fa-solid fa-graduation-cap mr-2 text-blue-600"></i>Manage Trips
+          </a>    
+    </li>
+        <li>
+
+          <a href="field_schedule.php" class="block hover:bg-blue-200 p-2 rounded">
+            <i class="fa-solid fa-calendar-days mr-2 text-blue-600"></i>Field Schedule
+          </a>
+        </li>
+        <li>
+          
           <a href="my_payrolls.php" class="block hover:bg-blue-200 p-2 rounded">
             <i class="fa-solid fa-money-check-dollar mr-2 text-blue-600"></i>My Payrolls
           </a>

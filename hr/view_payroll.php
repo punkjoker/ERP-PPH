@@ -136,18 +136,134 @@ $manualDeductions = $details['deductions'] ?? [];
 </div>
 
     </div>
+<!-- Payroll Workflow Details -->
+<div class="bg-blue-50 rounded-lg p-4 mb-6">
+    <h2 class="text-lg font-semibold mb-4 text-blue-800">
+        Payroll Workflow Details
+    </h2>
 
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+        <!-- Prepared By -->
+        <div class="bg-white rounded-lg p-4 shadow-sm">
+            <h3 class="font-semibold text-gray-700 mb-3">
+                Prepared By
+            </h3>
+
+            <p class="mb-2">
+                <strong>Name:</strong>
+                <?= htmlspecialchars($payroll['prepared_by'] ?? 'Not recorded') ?>
+            </p>
+
+            <p class="mb-2">
+                <strong>Date:</strong>
+                <?= !empty($payroll['date_prepared'])
+                    ? htmlspecialchars($payroll['date_prepared'])
+                    : 'Not recorded' ?>
+            </p>
+
+            <p>
+                <strong>Status:</strong>
+                <?php $prepStatus = $payroll['preparation_status'] ?? 'Pending'; ?>
+                <span class="inline-block px-2 py-1 rounded-full text-sm
+                    <?= $prepStatus === 'Prepared'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-yellow-100 text-yellow-700' ?>">
+                    <?= htmlspecialchars($prepStatus) ?>
+                </span>
+            </p>
+        </div>
+
+        <!-- Approved By -->
+        <div class="bg-white rounded-lg p-4 shadow-sm">
+            <h3 class="font-semibold text-gray-700 mb-3">
+                Approved By
+            </h3>
+
+            <p class="mb-2">
+                <strong>Name:</strong>
+                <?= htmlspecialchars($payroll['approved_by'] ?? 'Not recorded') ?>
+            </p>
+
+            <p class="mb-2">
+                <strong>Date:</strong>
+                <?= !empty($payroll['approval_date'])
+                    ? htmlspecialchars($payroll['approval_date'])
+                    : 'Not recorded' ?>
+            </p>
+
+            <p>
+                <strong>Status:</strong>
+                <?php $approvalStatus = $payroll['approval_status'] ?? 'Pending'; ?>
+                <span class="inline-block px-2 py-1 rounded-full text-sm
+                    <?= $approvalStatus === 'Approved'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-yellow-100 text-yellow-700' ?>">
+                    <?= htmlspecialchars($approvalStatus) ?>
+                </span>
+            </p>
+        </div>
+
+        <!-- Paid By -->
+        <div class="bg-white rounded-lg p-4 shadow-sm">
+            <h3 class="font-semibold text-gray-700 mb-3">
+                Paid By
+            </h3>
+
+            <p class="mb-2">
+                <strong>Name:</strong>
+                <?= htmlspecialchars($payroll['accountant_name'] ?? 'Not recorded') ?>
+            </p>
+
+            <p class="mb-2">
+                <strong>Payment Date:</strong>
+                <?= !empty($payroll['payment_date'])
+                    ? htmlspecialchars($payroll['payment_date'])
+                    : 'Not recorded' ?>
+            </p>
+
+            <p>
+                <strong>Status:</strong>
+                <?php $paymentStatus = $payroll['payment_status'] ?? 'Pending Pay'; ?>
+                <span class="inline-block px-2 py-1 rounded-full text-sm
+                    <?= $paymentStatus === 'Paid'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-yellow-100 text-yellow-700' ?>">
+                    <?= htmlspecialchars($paymentStatus) ?>
+                </span>
+            </p>
+        </div>
+
+    </div>
+</div>
     <div class="mt-6 text-right">
         <a href="payroll_list.php" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded-lg">
             ← Back to Payroll List
         </a>
     </div>
     
-    <a href="download_payroll_pdf.php?id=<?= $user_id ?>&month=<?= $selectedMonth ?>" 
-       class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
-        📄 Download PDF
-    </a>
-</div>
+   <a href="download_payroll_pdf.php?id=<?= $user_id ?>&month=<?= urlencode($selectedMonth) ?>"
+   onclick="return openPayrollPDF(this.href);"
+   class="inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+    📄 Download PDF
+</a>
+
+<script>
+function openPayrollPDF(url) {
+    const popup = window.open(
+        url,
+        'payrollPDF',
+        'width=900,height=700,resizable=yes,scrollbars=yes'
+    );
+
+    if (!popup) {
+        alert('Your browser blocked the popup. Please allow popups for this site.');
+        return false;
+    }
+
+    return false;
+}
+</script>
 
 </div>
 

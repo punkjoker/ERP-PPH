@@ -11,14 +11,19 @@ if (!isset($_SESSION['user_id'])) {
 $user_id = $_SESSION['user_id'];
 
 // ✅ Fetch payroll records for this user
+// Fetch only paid payroll records for the logged-in user
 $stmt = $conn->prepare("
-    SELECT id, month, year, base_salary, total_allowances, total_deductions, net_pay
+    SELECT payroll_id, month, year, base_salary, total_allowances,
+           total_deductions, net_pay, payment_status
     FROM payroll_records
     WHERE user_id = ?
+      AND payment_status = 'Paid'
     ORDER BY year DESC, FIELD(month,
-        'January','February','March','April','May','June','July','August','September','October','November','December'
+        'January','February','March','April','May','June',
+        'July','August','September','October','November','December'
     )
 ");
+
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -56,9 +61,10 @@ $result = $stmt->get_result();
                     <td class="py-2 px-4 text-red-700 font-semibold"><?php echo number_format($row['total_deductions'], 2); ?></td>
                     <td class="py-2 px-4 font-bold text-gray-800"><?php echo number_format($row['net_pay'], 2); ?></td>
                     <td class="py-2 px-4 text-center">
-                        <a href="view_my_salary.php?id=<?php echo $row['id']; ?>" class="bg-blue-600 text-white py-1 px-3 rounded hover:bg-blue-700 transition">
-                            View
-                        </a>
+                       <a href="view_my_salary.php?id=<?= urlencode($row['payroll_id']) ?>"
+   class="bg-blue-600 text-white py-1 px-3 rounded hover:bg-blue-700 transition">
+    View
+</a>
                     </td>
                 </tr>
                 <?php endwhile; ?>

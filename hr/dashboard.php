@@ -263,6 +263,7 @@ include 'navbar.php';
                 <div class="module-icon bg-sky-100 text-sky-700">
                     <i class="fa-solid fa-book-open"></i>
                 </div>
+                
                 <div>
                     <h3 class="font-bold">Record Training</h3>
                     <p class="text-sm text-gray-500 mt-1">
@@ -316,6 +317,40 @@ include 'navbar.php';
                     <h3 class="font-bold">Daily Reports</h3>
                     <p class="text-sm text-gray-500 mt-1">
                         View staff daily reports
+                    </p>
+                </div>
+            </a>
+            <a href="admin_purchasing_report.php" class="module-card">
+                <div class="module-icon bg-blue-100 text-blue-700">
+                    <i class="fa-solid fa-file-lines"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold">Purchasing Reports</h3>
+                    <p class="text-sm text-gray-500 mt-1">
+                        View purchasing daily reports
+                    </p>
+                </div>
+
+            </a>
+            <a href="admin_production_report.php" class="module-card">
+                <div class="module-icon bg-blue-100 text-blue-700">
+                    <i class="fa-solid fa-file-lines"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold">Production Reports</h3>
+                    <p class="text-sm text-gray-500 mt-1">
+                        View production daily reports
+                    </p>
+                </div>
+            </a>
+            <a href="sales_daily_report.php" class="module-card">
+                <div class="module-icon bg-blue-100 text-blue-700">
+                    <i class="fa-solid fa-file-lines"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold">Sales Reports</h3>
+                    <p class="text-sm text-gray-500 mt-1">
+                        View sales daily reports
                     </p>
                 </div>
             </a>

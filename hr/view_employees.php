@@ -52,6 +52,7 @@ include 'db_con.php';
             <tr>
                 <th class="border px-2 py-1">#</th>
                 <th class="border px-2 py-1">Name</th>
+                <th class="border px-2 py-1">Email</th>
                 <th class="border px-2 py-1">National ID</th>
                 <th class="border px-2 py-1">KRA PIN</th>
                 <th class="border px-2 py-1">NSSF</th>
@@ -97,6 +98,9 @@ include 'db_con.php';
                     <tr class="hover:bg-gray-50 text-sm">
                         <td class="border px-2 py-1"><?= $count++ ?></td>
                         <td class="border px-2 py-1"><?= htmlspecialchars($row['first_name'].' '.$row['last_name']) ?></td>
+                        <td class="border px-2 py-1">
+    <?= htmlspecialchars($row['email'] ?? '', ENT_QUOTES, 'UTF-8') ?>
+</td>
                         <td class="border px-2 py-1"><?= htmlspecialchars($row['national_id']) ?></td>
                         <td class="border px-2 py-1"><?= htmlspecialchars($row['kra_pin']) ?></td>
                         <td class="border px-2 py-1"><?= htmlspecialchars($row['nssf_number']) ?></td>
@@ -134,7 +138,14 @@ include 'db_con.php';
 
           <label class="block text-sm mb-1">Last Name</label>
           <input type="text" name="last_name" value="<?= htmlspecialchars($row['last_name']) ?>" class="border p-2 w-full mb-2 rounded">
-
+<label class="block text-sm mb-1">Email</label>
+<input
+    type="email"
+    name="email"
+    value="<?= htmlspecialchars($row['email'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+    class="border p-2 w-full mb-2 rounded"
+    maxlength="255"
+>
           <label class="block text-sm mb-1">National ID</label>
           <input type="text" name="national_id" value="<?= htmlspecialchars($row['national_id']) ?>" class="border p-2 w-full mb-2 rounded">
 

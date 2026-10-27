@@ -198,7 +198,49 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST'
             }
 
             // Prevent duplicate accounts by email.
-            
+
+// Prevent duplicate accounts by email.
+if ($use_pdo) {
+    $check = $pdo->prepare("
+        SELECT user_id
+        FROM users
+        WHERE email = ?
+        LIMIT 1
+    ");
+    $check->execute([$email]);
+    $existing = $check->fetch(PDO::FETCH_ASSOC);
+} else {
+    $check = $conn->prepare("
+        SELECT user_id
+        FROM users
+        WHERE email = ?
+        LIMIT 1
+    ");
+    $check->bind_param("s", $email);
+    $check->execute();
+
+    $result = $check->get_result();
+    $existing = $result->fetch_assoc();
+
+    $check->close();
+}
+
+if ($existing) {
+    throw new Exception(
+        "An account already exists for this employee's email address."
+    );
+}
+
+// Hash the password BEFORE inserting it.
+$hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+
+if ($hashedPassword === false) {
+    throw new Exception("Could not secure the password. Please try again.");
+}
+
+// Create the account.
+// Create the account and save the selected employee_id.
+// Group ID is fixed to 9.
 if ($use_pdo) {
     $insert = $pdo->prepare("
         INSERT INTO users
@@ -236,56 +278,9 @@ if ($use_pdo) {
     $insert->close();
 }
 
+$success = "Staff account created successfully for " . $full_name . ".";
+$_POST = [];
 
-            if ($existing) {
-                throw new Exception(
-                    "An account already exists for this employee's email address."
-                );
-            }
-
-            $hashedPassword = password_hash(
-                $password,
-                PASSWORD_DEFAULT
-            );
-
-            if ($use_pdo) {
-                $insert = $pdo->prepare("
-                    INSERT INTO users
-                        (full_name, email, national_id, password, group_id)
-                    VALUES (?, ?, ?, ?, ?)
-                ");
-
-                $insert->execute([
-                    $full_name,
-                    $email,
-                    $national_id,
-                    $hashedPassword,
-                    $group_id
-                ]);
-            } else {
-                $insert = $conn->prepare("
-                    INSERT INTO users
-                        (full_name, email, national_id, password, group_id)
-                    VALUES (?, ?, ?, ?, ?)
-                ");
-
-                $insert->bind_param(
-                    "ssssi",
-                    $full_name,
-                    $email,
-                    $national_id,
-                    $hashedPassword,
-                    $group_id
-                );
-
-                $insert->execute();
-                $insert->close();
-            }
-
-            $success = "Staff account created successfully for " . $full_name . ".";
-
-            // Clear submitted form values.
-            $_POST = [];
 
         } catch (Throwable $e) {
             $error = $e->getMessage();
@@ -477,17 +472,7 @@ try {
                                placeholder="Employee National ID">
                     </div>
 
-                    <div>
-                        <label class="block text-sm font-semibold text-slate-700 mb-2">
-                            Assigned Group
-                        </label>
-
-                        <div class="w-full bg-blue-50 border border-blue-100
-                                    rounded-xl p-3 text-blue-800 font-semibold">
-                            <i class="fa-solid fa-shield-halved mr-2"></i>
-                            Group ID 9
-                        </div>
-                    </div>
+                    
 
                     <div>
                         <label for="password"

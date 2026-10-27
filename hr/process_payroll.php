@@ -44,6 +44,65 @@ $gross_pay = $base_salary + $total_allowances;
 $estimated_deductions = ($gross_pay * $total_deduction_rate) / 100;
 $net_pay = $gross_pay - $estimated_deductions;
 ?>
+
+<?php
+// Read the selected payroll month from the URL.
+// Example: process_payroll.php?id=15&month=2026-10
+
+$selectedMonth = $_GET['month'] ?? date('Y-m');
+
+if (!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $selectedMonth)) {
+    $selectedMonth = date('Y-m');
+}
+
+$monthDate = DateTime::createFromFormat('!Y-m', $selectedMonth);
+$payrollMonth = $monthDate->format('F');
+$payrollYear = (int) $monthDate->format('Y');
+
+// Fetch the saved workflow information for this employee and month.
+$stmt = $conn->prepare("
+    SELECT
+        prepared_by,
+        date_prepared,
+        preparation_status,
+        approved_by,
+        approval_date,
+        approval_status,
+        accountant_name,
+        payment_date,
+        payment_status
+    FROM payroll_records
+    WHERE user_id = ?
+      AND month = ?
+      AND year = ?
+    LIMIT 1
+");
+
+$stmt->bind_param(
+    "isi",
+    $user_id,
+    $payrollMonth,
+    $payrollYear
+);
+
+$stmt->execute();
+$payrollRecord = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
+// Defaults for months without a saved record.
+$payrollRecord = $payrollRecord ?: [
+    'prepared_by' => '',
+    'date_prepared' => '',
+    'preparation_status' => 'Pending',
+    'approved_by' => '',
+    'approval_date' => '',
+    'approval_status' => 'Pending',
+    'accountant_name' => '',
+    'payment_date' => '',
+    'payment_status' => 'Pending Pay'
+];
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -132,117 +191,388 @@ $net_pay = $gross_pay - $estimated_deductions;
     <h2 class="text-lg font-semibold text-gray-700 mb-3">Salary Summary</h2>
 
     <div class="grid grid-cols-2 gap-4 mb-4">
-        <div>
-            <label class="block text-gray-600 font-medium mb-1">Month</label>
-            <select id="payrollMonth" class="border rounded px-3 py-2 w-full">
-                <option value="">Select Month</option>
-                <?php 
-                $months = [
-                    "January","February","March","April","May","June",
-                    "July","August","September","October","November","December"
-                ];
-                foreach ($months as $m): ?>
-                    <option value="<?= $m ?>" <?= (date('F') == $m ? 'selected' : '') ?>><?= $m ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
+        
+<div>
+    <label class="block text-gray-600 font-medium mb-1">
+        Month
+    </label>
 
-        <div>
-            <label class="block text-gray-600 font-medium mb-1">Year</label>
-            <input type="number" id="payrollYear" class="border rounded px-3 py-2 w-full" value="<?= date('Y') ?>" readonly>
-        </div>
-    </div>
+    <select id="payrollMonth"
+            class="border rounded px-3 py-2 w-full">
+
+        <?php
+        $months = [
+            "January", "February", "March", "April",
+            "May", "June", "July", "August",
+            "September", "October", "November", "December"
+        ];
+
+        foreach ($months as $m):
+        ?>
+            <option value="<?= htmlspecialchars($m, ENT_QUOTES, 'UTF-8') ?>"
+                <?= $payrollMonth === $m ? 'selected' : '' ?>>
+                <?= htmlspecialchars($m, ENT_QUOTES, 'UTF-8') ?>
+            </option>
+        <?php endforeach; ?>
+    </select>
+</div>
+
+<div>
+    <label class="block text-gray-600 font-medium mb-1">
+        Year
+    </label>
+
+    <input type="number"
+           id="payrollYear"
+           class="border rounded px-3 py-2 w-full"
+           value="<?= $payrollYear ?>"
+           readonly>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+
+    
+<!-- 1. Payroll Preparation -->
+<div>
+    <label class="block mb-1">Prepared By</label>
+    <input type="text" id="preparedBy"
+           value="<?= htmlspecialchars($payrollRecord['prepared_by'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+           class="border rounded px-3 py-2 w-full"
+           placeholder="Enter preparer's name">
+</div>
+
+<div>
+    <label class="block mb-1">Date Prepared</label>
+    <input type="date" id="datePrepared"
+           value="<?= htmlspecialchars($payrollRecord['date_prepared'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+           class="border rounded px-3 py-2 w-full">
+</div>
+
+<div>
+    <label class="block mb-1">Preparation Status</label>
+    <select id="preparationStatus"
+            class="border rounded px-3 py-2 w-full">
+        <option value="Pending"
+            <?= ($payrollRecord['preparation_status'] ?? 'Pending') === 'Pending' ? 'selected' : '' ?>>
+            Pending
+        </option>
+        <option value="Prepared"
+            <?= ($payrollRecord['preparation_status'] ?? '') === 'Prepared' ? 'selected' : '' ?>>
+            Prepared
+        </option>
+    </select>
+</div>
+
+<!-- 2. Payroll Approval -->
+<div>
+    <label class="block mb-1">Approved By</label>
+    <input type="text" id="approvedBy"
+           value="<?= htmlspecialchars($payrollRecord['approved_by'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+           class="border rounded px-3 py-2 w-full"
+           placeholder="Enter approver's name">
+</div>
+
+<div>
+    <label class="block mb-1">Approval Date</label>
+    <input type="date" id="approvalDate"
+           value="<?= htmlspecialchars($payrollRecord['approval_date'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+           class="border rounded px-3 py-2 w-full">
+</div>
+
+<div>
+    <label class="block mb-1">Approval Status</label>
+    <select id="approvalStatus"
+            class="border rounded px-3 py-2 w-full">
+        <option value="Pending"
+            <?= ($payrollRecord['approval_status'] ?? 'Pending') === 'Pending' ? 'selected' : '' ?>>
+            Pending
+        </option>
+        <option value="Approved"
+            <?= ($payrollRecord['approval_status'] ?? '') === 'Approved' ? 'selected' : '' ?>>
+            Approved
+        </option>
+    </select>
+</div>
+
+<!-- 3. Payroll Payment -->
+<div>
+    <label class="block mb-1">Accountant Name</label>
+    <input type="text" id="accountantName"
+           value="<?= htmlspecialchars($payrollRecord['accountant_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+           class="border rounded px-3 py-2 w-full"
+           placeholder="Enter accountant's name">
+</div>
+
+<div>
+    <label class="block mb-1">Payment Date</label>
+    <input type="date" id="paymentDate"
+           value="<?= htmlspecialchars($payrollRecord['payment_date'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+           class="border rounded px-3 py-2 w-full">
+</div>
+
+<div>
+    <label class="block mb-1">Payment Status</label>
+    <select id="paymentStatus"
+            class="border rounded px-3 py-2 w-full">
+        <option value="Pending Pay"
+            <?= ($payrollRecord['payment_status'] ?? 'Pending Pay') === 'Pending Pay' ? 'selected' : '' ?>>
+            Pending Pay
+        </option>
+        <option value="Paid"
+            <?= ($payrollRecord['payment_status'] ?? '') === 'Paid' ? 'selected' : '' ?>>
+            Paid
+        </option>
+    </select>
+</div>
 
     <p><strong>Gross Pay:</strong> Ksh <span id="grossPay"><?= number_format($gross_pay, 2) ?></span></p>
     <p><strong>Estimated Deductions:</strong> Ksh <span id="totalDeductions"><?= number_format($estimated_deductions, 2) ?></span></p>
     <p class="text-blue-700 font-semibold"><strong>Net Pay:</strong> Ksh <span id="netPay"><?= number_format($net_pay, 2) ?></span></p>
 
     <button id="savePayrollBtn" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded">Save Payroll</button>
+
+    <a href="payroll_list.php"
+   class="mt-4 inline-block bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded text-center">
+    Back to Payroll List
+</a>
+
 </div>
 
 </div>
+
 
 <script>
-let grossPay = <?= $gross_pay ?>;
-let totalDeductions = <?= $estimated_deductions ?>;
-let netPay = <?= $net_pay ?>;
+let grossPay = <?= (float) $gross_pay ?>;
+let totalDeductions = <?= (float) $estimated_deductions ?>;
+let netPay = <?= (float) $net_pay ?>;
+const baseSalary = <?= (float) $base_salary ?>;
+
+// Safely add a table row without inserting user input as HTML.
+function addTableRow(tableSelector, name, amount, suffix = "") {
+    const row = $("<tr>").addClass("border-b");
+
+    $("<td>")
+        .addClass("px-4 py-2")
+        .text(name)
+        .appendTo(row);
+
+    $("<td>")
+        .addClass("px-4 py-2")
+        .text(amount.toFixed(2) + suffix)
+        .appendTo(row);
+
+    $(tableSelector + " tbody").append(row);
+}
 
 // Add Manual Allowance
-$("#addAllowanceBtn").on("click", function() {
-    let name = $("#manualAllowanceName").val().trim();
-    let amount = parseFloat($("#manualAllowanceAmount").val());
-    if (!name || isNaN(amount) || amount <= 0) return alert("Enter valid allowance details.");
+$("#addAllowanceBtn").on("click", function (event) {
+    event.preventDefault();
 
-    $("#allowanceTable tbody").append(`<tr><td class='px-4 py-2'>${name}</td><td class='px-4 py-2'>${amount.toFixed(2)}</td></tr>`);
+    const name = $("#manualAllowanceName").val().trim();
+    const amount = parseFloat($("#manualAllowanceAmount").val());
+
+    if (!name || !Number.isFinite(amount) || amount <= 0) {
+        alert("Enter valid allowance details.");
+        return;
+    }
+
+    addTableRow("#allowanceTable", name, amount);
+
     grossPay += amount;
     updateSummary();
+
     $("#manualAllowanceName").val("");
     $("#manualAllowanceAmount").val("");
 });
 
 // Add Manual Deduction
-$("#addDeductionBtn").on("click", function() {
-    let name = $("#manualDeductionName").val().trim();
-    let amount = parseFloat($("#manualDeductionAmount").val());
-    if (!name || isNaN(amount) || amount <= 0) return alert("Enter valid deduction details.");
+$("#addDeductionBtn").on("click", function (event) {
+    event.preventDefault();
 
-    $("#deductionTable tbody").append(`<tr><td class='px-4 py-2'>${name}</td><td class='px-4 py-2'>${amount.toFixed(2)}</td></tr>`);
+    const name = $("#manualDeductionName").val().trim();
+    const amount = parseFloat($("#manualDeductionAmount").val());
+
+    if (!name || !Number.isFinite(amount) || amount <= 0) {
+        alert("Enter valid deduction details.");
+        return;
+    }
+
+    // Manual deductions are entered as amounts, not percentages.
+    addTableRow("#deductionTable", name, amount);
+
     totalDeductions += amount;
     updateSummary();
+
     $("#manualDeductionName").val("");
     $("#manualDeductionAmount").val("");
 });
 
+// Update salary summary
 function updateSummary() {
     netPay = grossPay - totalDeductions;
-    $("#grossPay").text(grossPay.toLocaleString());
-    $("#totalDeductions").text(totalDeductions.toLocaleString());
-    $("#netPay").text(netPay.toLocaleString());
+
+    $("#grossPay").text(
+        grossPay.toLocaleString("en-KE", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })
+    );
+
+    $("#totalDeductions").text(
+        totalDeductions.toLocaleString("en-KE", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })
+    );
+
+    $("#netPay").text(
+        netPay.toLocaleString("en-KE", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })
+    );
 }
-</script>
-<script>
-$("#savePayrollBtn").on("click", function() {
+
+// Save payroll and all three workflow stages
+$("#savePayrollBtn").on("click", function (event) {
+    event.preventDefault();
+
+    const button = $(this);
     const month = $("#payrollMonth").val();
-const year = $("#payrollYear").val();
-if (!month || !year) return alert("Please select a month and year before saving.");
+    const year = $("#payrollYear").val();
 
+    if (!month || !year) {
+        alert("Please select a month and year before saving.");
+        return;
+    }
 
-    // Gather data
-    let allowances = [];
-    $("#allowanceTable tbody tr").each(function() {
-        let cols = $(this).find("td");
-        allowances.push({
-            name: $(cols[0]).text(),
-            amount: parseFloat($(cols[1]).text().replace(/,/g, ''))
-        });
+    // Collect allowances
+    const allowances = [];
+
+    $("#allowanceTable tbody tr").each(function () {
+        const cols = $(this).find("td");
+
+        if (cols.length >= 2) {
+            allowances.push({
+                name: $(cols[0]).text().trim(),
+                amount: parseFloat(
+                    $(cols[1]).text().replace(/,/g, "")
+                ) || 0
+            });
+        }
     });
 
-    let deductions = [];
-    $("#deductionTable tbody tr").each(function() {
-        let cols = $(this).find("td");
-        deductions.push({
-            name: $(cols[0]).text(),
-            amount: $(cols[1]).text().includes('%') ? $(cols[1]).text() : parseFloat($(cols[1]).text().replace(/,/g, ''))
-        });
+    // Collect deductions. Existing percentage deductions are retained
+    // as percentages; manually added deductions are amounts.
+    const deductions = [];
+
+    $("#deductionTable tbody tr").each(function () {
+        const cols = $(this).find("td");
+
+        if (cols.length >= 2) {
+            const name = $(cols[0]).text().trim();
+            const amountText = $(cols[1]).text().trim();
+
+            deductions.push({
+                name: name,
+                amount: amountText.includes("%")
+                    ? amountText
+                    : (parseFloat(amountText.replace(/,/g, "")) || 0)
+            });
+        }
     });
+
+    // Collect preparation, approval and payment information
+    const preparedBy = $("#preparedBy").val().trim();
+    const datePrepared = $("#datePrepared").val();
+    const preparationStatus = $("#preparationStatus").val();
+
+    const approvedBy = $("#approvedBy").val().trim();
+    const approvalDate = $("#approvalDate").val();
+    const approvalStatus = $("#approvalStatus").val();
+
+    const accountantName = $("#accountantName").val().trim();
+    const paymentDate = $("#paymentDate").val();
+    const paymentStatus = $("#paymentStatus").val();
+
+    // Client-side checks for completed stages.
+    // save_payroll.php must also validate these on the server.
+    if (preparationStatus === "Prepared" &&
+        (!preparedBy || !datePrepared)) {
+        alert("Enter the preparer's name and preparation date.");
+        return;
+    }
+
+    if (approvalStatus === "Approved" &&
+        (!approvedBy || !approvalDate)) {
+        alert("Enter the approver's name and approval date.");
+        return;
+    }
+
+    if (paymentStatus === "Paid" &&
+        (!accountantName || !paymentDate)) {
+        alert("Enter the accountant's name and payment date.");
+        return;
+    }
+
+    if (netPay < 0) {
+        alert("Total deductions cannot exceed gross pay.");
+        return;
+    }
 
     const payload = {
-        user_id: <?= $user_id ?>,
-        full_name: "<?= addslashes($user['full_name']) ?>",
-        base_salary: <?= $base_salary ?>,
-        total_allowances: grossPay - <?= $base_salary ?>,
+        user_id: <?= (int) $user_id ?>,
+        full_name: <?= json_encode($user['full_name'] ?? '') ?>,
+        base_salary: baseSalary,
+        total_allowances: grossPay - baseSalary,
         total_deductions: totalDeductions,
         net_pay: netPay,
-        month,
-        year,
-        details: JSON.stringify({allowances, deductions})
+        month: month,
+        year: year,
+
+        // Preparation
+        prepared_by: preparedBy,
+        date_prepared: datePrepared,
+        preparation_status: preparationStatus,
+
+        // Approval
+        approved_by: approvedBy,
+        approval_date: approvalDate,
+        approval_status: approvalStatus,
+
+        // Payment
+        accountant_name: accountantName,
+        payment_date: paymentDate,
+        payment_status: paymentStatus,
+
+        details: JSON.stringify({
+            allowances: allowances,
+            deductions: deductions
+        })
     };
 
-    $.post("save_payroll.php", payload, function(response) {
+    button.prop("disabled", true).text("Saving...");
+
+    $.ajax({
+        url: "save_payroll.php",
+        type: "POST",
+        data: payload,
+        dataType: "text"
+    })
+    .done(function (response) {
         alert(response);
+    })
+    .fail(function (xhr) {
+        const message = xhr.responseText
+            ? xhr.responseText
+            : "Unable to save payroll. Please try again.";
+
+        alert(message);
+    })
+    .always(function () {
+        button.prop("disabled", false).text("Save Payroll");
     });
 });
 </script>
-
 </body>
 </html>

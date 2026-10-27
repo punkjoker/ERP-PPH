@@ -684,80 +684,58 @@ if (file_exists($navbarPath)) {
         }
 
         .chart-scroll {
-            overflow-x: auto;
-            padding: 15px 5px 30px;
-            min-height: 250px;
-        }
+    width: 100%;
+    overflow: auto;
+    padding: 8px 2px 20px;
+    min-height: 0;
+}
 
-        .org-tree {
-            min-width: max-content;
-            padding: 15px;
-            text-align: center;
-        }
+.org-tree {
+    width: max-content;
+    min-width: 100%;
+    padding: 8px 2px;
+    text-align: center;
+}
 
         .org-tree ul {
-            position: relative;
-            display: flex;
-            justify-content: center;
-            padding: 28px 0 0;
-            margin: 0;
-        }
+    position: relative;
+    display: flex;
+    justify-content: center;
+    padding: 18px 0 0;
+    margin: 0;
+}
 
-        .org-tree li {
-            list-style: none;
-            position: relative;
-            padding: 24px 10px 0;
-        }
+.org-tree li {
+    list-style: none;
+    position: relative;
+    padding: 16px 4px 0;
+}
 
         .org-tree li::before,
-        .org-tree li::after {
-            content: "";
-            position: absolute;
-            top: 0;
-            right: 50%;
-            width: 50%;
-            height: 24px;
-            border-top: 2px solid #cbd4e0;
-        }
+.org-tree li::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 50%;
+    width: 50%;
+    height: 16px;
+    border-top: 1px solid #cbd4e0;
+}
 
-        .org-tree li::after {
-            right: auto;
-            left: 50%;
-            border-left: 2px solid #cbd4e0;
-        }
+.org-tree li::after {
+    right: auto;
+    left: 50%;
+    border-left: 1px solid #cbd4e0;
+}
 
-        .org-tree li:only-child::before,
-        .org-tree li:only-child::after {
-            display: none;
-        }
-
-        .org-tree li:only-child {
-            padding-top: 0;
-        }
-
-        .org-tree li:first-child::before,
-        .org-tree li:last-child::after {
-            border: 0;
-        }
-
-        .org-tree li:last-child::before {
-            border-right: 2px solid #cbd4e0;
-            border-radius: 0 7px 0 0;
-        }
-
-        .org-tree li:first-child::after {
-            border-radius: 7px 0 0 0;
-        }
-
-        .org-tree ul ul::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: 50%;
-            height: 28px;
-            border-left: 2px solid #cbd4e0;
-        }
-
+.org-tree ul ul::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    height: 18px;
+    border-left: 1px solid #cbd4e0;
+}
         .org-tree > ul {
             padding-top: 0;
         }
@@ -772,20 +750,26 @@ if (file_exists($navbarPath)) {
         }
 
         .org-card {
-            display: inline-flex;
-            flex-direction: column;
-            align-items: center;
-            width: 210px;
-            min-height: 215px;
-            vertical-align: top;
-            padding: 17px 13px;
-            background: #fff;
-            border: 1px solid #dce3ed;
-            border-top: 4px solid var(--gold);
-            border-radius: 11px;
-            box-shadow: 0 5px 15px rgba(23, 43, 77, .08);
-            transition: transform .2s, box-shadow .2s;
-        }
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+
+    width: 155px;
+    min-height: 0;
+    vertical-align: top;
+
+    padding: 10px 8px;
+
+    background: #fff;
+    border: 1px solid #dce3ed;
+    border-top: 3px solid var(--gold);
+    border-radius: 8px;
+
+    box-shadow: 0 3px 8px rgba(23, 43, 77, .07);
+    transition: transform .2s, box-shadow .2s;
+
+    overflow-wrap: anywhere;
+}
 
         .org-card:hover {
             transform: translateY(-3px);
@@ -798,51 +782,69 @@ if (file_exists($navbarPath)) {
         }
 
         .org-avatar {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            width: 48px;
-            height: 48px;
-            margin-bottom: 10px;
-            background: #edf1f8;
-            color: var(--navy);
-            border-radius: 50%;
-            font-size: 15px;
-            font-weight: 700;
-        }
+    display: flex;
+    justify-content: center;
+    align-items: center;
 
-        .org-name {
-            font-size: 14px;
-            font-weight: 700;
-            line-height: 1.4;
-            color: var(--navy);
-        }
+    width: 34px;
+    height: 34px;
+    margin-bottom: 6px;
 
-        .org-position {
-            margin-top: 5px;
-            font-size: 12px;
-            color: #53647c;
-        }
+    background: #edf1f8;
+    color: var(--navy);
+    border-radius: 50%;
 
-        .org-department {
-            margin-top: 8px;
-            padding: 5px 8px;
-            background: #fff3d2;
-            border-radius: 20px;
-            font-size: 11px;
-            color: #745512;
-        }
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
 
-        .org-meta {
-            margin-top: 9px;
-            font-size: 11px;
-            color: var(--muted);
-        }
+.org-name {
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--navy);
+    overflow-wrap: anywhere;
+}
 
-        .org-actions {
-            margin-top: 12px;
-        }
+.org-position {
+    margin-top: 4px;
+    font-size: 10px;
+    line-height: 1.3;
+    color: #53647c;
+}
 
+.org-department {
+    margin-top: 5px;
+    padding: 4px 6px;
+
+    background: #fff3d2;
+    border-radius: 12px;
+
+    font-size: 9px;
+    line-height: 1.3;
+    color: #745512;
+    overflow-wrap: anywhere;
+}
+
+.org-meta {
+    margin-top: 5px;
+    font-size: 9px;
+    color: var(--muted);
+}
+
+.org-actions {
+    margin-top: 7px;
+}
+
+.btn-small {
+    display: inline-block;
+    padding: 5px 9px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 10px;
+    font-weight: 700;
+}
         .btn-small {
             display: inline-block;
             padding: 7px 12px;

@@ -1,115 +1,289 @@
+
 <?php
 require 'db_con.php';
 require 'fpdf.php';
 
 $user_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
-$selectedMonth = isset($_GET['month']) ? $_GET['month'] : date('Y-m');
-list($year, $monthNum) = explode('-', $selectedMonth);
-$monthText = date('F', mktime(0, 0, 0, $monthNum, 10));
+$selectedMonth = $_GET['month'] ?? date('Y-m');
 
-// Fetch payroll record
+// Validate month format
+if (!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $selectedMonth)) {
+    $selectedMonth = date('Y-m');
+}
+
+[$year, $monthNum] = explode('-', $selectedMonth);
+$year = (int)$year;
+$monthNum = (int)$monthNum;
+
+$monthText = date('F', mktime(0, 0, 0, $monthNum, 10));
+$monthNameYear = $monthText . ' ' . $year;
+
+if ($user_id <= 0) {
+    die('Invalid employee ID.');
+}
+
+// Fetch payroll record and workflow information
 $stmt = $conn->prepare("
-    SELECT pr.*, u.full_name, u.email, u.national_id, u.status
+    SELECT
+        pr.*,
+        u.full_name,
+        u.email,
+        u.national_id,
+        u.status
     FROM payroll_records pr
     INNER JOIN users u ON pr.user_id = u.user_id
-    WHERE pr.user_id = ? AND pr.month = ? AND pr.year = ?
+    WHERE pr.user_id = ?
+      AND pr.month = ?
+      AND pr.year = ?
+    LIMIT 1
 ");
+
 $stmt->bind_param("isi", $user_id, $monthText, $year);
 $stmt->execute();
 $result = $stmt->get_result();
 $payroll = $result->fetch_assoc();
+$stmt->close();
 
 if (!$payroll) {
-    die("No payroll record found.");
+    die("No payroll record found for this employee in " .
+        htmlspecialchars($monthNameYear, ENT_QUOTES, 'UTF-8') . ".");
 }
 
-// Decode details
-$details = json_decode($payroll['details'], true);
+// Decode allowances and deductions
+$details = json_decode($payroll['details'] ?? '', true);
 $allowances = $details['allowances'] ?? [];
 $deductions = $details['deductions'] ?? [];
 
+// Return an underline when a value is empty or NULL
+function pdfField($value, $length = 25) {
+    $value = trim((string)($value ?? ''));
+
+    return $value !== ''
+        ? $value
+        : str_repeat('_', $length);
+}
+
 // Initialize PDF
-$pdf = new FPDF();
+$pdf = new FPDF('P', 'mm', 'A4');
+$pdf->SetMargins(10, 10, 10);
+$pdf->SetAutoPageBreak(true, 15);
 $pdf->AddPage();
 
 // --- Header with logo ---
-$pdf->Image('images/lynn_logo.png', 10, 8, 30); // X, Y, Width
-$pdf->SetFont('Arial', 'B', 18);
-$pdf->Cell(0, 10, 'LYNNTECH CHEMICALS $ EQUIPMENT LTD', 0, 1, 'C');
-$pdf->SetFont('Arial', '', 12);
-$pdf->Cell(0, 6, 'Employee Payslip', 0, 1, 'C');
-$pdf->Ln(10);
+if (file_exists('images/lynn_logo.png')) {
+    $pdf->Image('images/lynn_logo.png', 10, 8, 30);
+}
 
-// --- Employee Info Box ---
+$pdf->SetY(12);
+$pdf->SetFont('Arial', 'B', 16);
+$pdf->Cell(0, 9, 'LYNNTECH CHEMICALS & EQUIPMENT LTD', 0, 1, 'C');
+
+$pdf->SetFont('Arial', '', 12);
+$pdf->Cell(0, 7, 'Employee Payslip', 0, 1, 'C');
+
+$pdf->SetFont('Arial', 'B', 11);
+$pdf->Cell(0, 7, 'Payroll Period: ' . $monthNameYear, 0, 1, 'C');
+$pdf->Ln(5);
+
+// --- Employee Details ---
 $pdf->SetFont('Arial', 'B', 12);
 $pdf->Cell(0, 8, 'Employee Details', 0, 1, 'L');
-$pdf->SetFont('Arial', '', 11);
+
+$pdf->SetFont('Arial', '', 10);
 $pdf->Cell(95, 8, 'Name: ' . $payroll['full_name'], 1, 0);
 $pdf->Cell(95, 8, 'Status: ' . ucfirst($payroll['status']), 1, 1);
+
 $pdf->Cell(95, 8, 'Email: ' . $payroll['email'], 1, 0);
 $pdf->Cell(95, 8, 'National ID: ' . $payroll['national_id'], 1, 1);
+
 $pdf->Cell(95, 8, 'Month: ' . $monthText, 1, 0);
 $pdf->Cell(95, 8, 'Year: ' . $year, 1, 1);
-$pdf->Ln(8);
+$pdf->Ln(6);
 
 // --- Salary Summary ---
 $pdf->SetFont('Arial', 'B', 12);
 $pdf->Cell(0, 8, 'Salary Summary', 0, 1);
-$pdf->SetFont('Arial', '', 11);
-$pdf->Cell(95, 8, 'Base Salary', 1);
-$pdf->Cell(95, 8, 'Ksh ' . number_format($payroll['base_salary'], 2), 1, 1);
-$pdf->Cell(95, 8, 'Total Allowances', 1);
-$pdf->Cell(95, 8, 'Ksh ' . number_format($payroll['total_allowances'], 2), 1, 1);
-$pdf->Cell(95, 8, 'Total Deductions', 1);
-$pdf->Cell(95, 8, 'Ksh ' . number_format($payroll['total_deductions'], 2), 1, 1);
+
+$pdf->SetFont('Arial', '', 10);
+
+$pdf->Cell(95, 8, 'Base Salary', 1, 0);
+$pdf->Cell(95, 8, 'Ksh ' . number_format((float)$payroll['base_salary'], 2), 1, 1);
+
+$pdf->Cell(95, 8, 'Total Allowances', 1, 0);
+$pdf->Cell(95, 8, 'Ksh ' . number_format((float)$payroll['total_allowances'], 2), 1, 1);
+
+$pdf->Cell(95, 8, 'Total Deductions', 1, 0);
+$pdf->Cell(95, 8, 'Ksh ' . number_format((float)$payroll['total_deductions'], 2), 1, 1);
 
 $pdf->SetFont('Arial', 'B', 11);
 $pdf->SetFillColor(230, 230, 230);
-$pdf->Cell(95, 8, 'Net Pay', 1, 0, 'L', true);
-$pdf->Cell(95, 8, 'Ksh ' . number_format($payroll['net_pay'], 2), 1, 1, 'L', true);
-$pdf->Ln(8);
 
-// --- Allowances Section ---
-$pdf->SetFont('Arial', 'B', 12);
-$pdf->Cell(0, 8, 'Allowances', 0, 1);
-$pdf->SetFont('Arial', '', 11);
-
-if (count($allowances) > 0) {
-    foreach ($allowances as $a) {
-        $amount = floatval(preg_replace('/[^0-9.\-]/', '', $a['amount']));
-        $pdf->Cell(95, 8, $a['name'], 1);
-        $pdf->Cell(95, 8, 'Ksh ' . number_format($amount, 2), 1, 1);
-    }
-} else {
-    $pdf->Cell(0, 8, 'No allowances available.', 1, 1);
-}
+$pdf->Cell(95, 9, 'NET PAY', 1, 0, 'L', true);
+$pdf->Cell(
+    95,
+    9,
+    'Ksh ' . number_format((float)$payroll['net_pay'], 2),
+    1,
+    1,
+    'L',
+    true
+);
 $pdf->Ln(6);
 
-// --- Deductions Section ---
+// --- Allowances ---
 $pdf->SetFont('Arial', 'B', 12);
-$pdf->Cell(0, 8, 'Deductions', 0, 1);
-$pdf->SetFont('Arial', '', 11);
+$pdf->Cell(0, 8, 'Allowances Breakdown', 0, 1);
 
-if (count($deductions) > 0) {
-    foreach ($deductions as $d) {
-        $raw = $d['amount'];
-        $isPercentage = strpos($raw, '%') !== false;
-        $rate = $isPercentage ? $raw : '-';
-        $deductionAmount = $isPercentage
-            ? (floatval(preg_replace('/[^0-9.\-]/', '', $raw)) / 100) * $payroll['base_salary']
-            : floatval(preg_replace('/[^0-9.\-]/', '', $raw));
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Cell(120, 8, 'Allowance', 1, 0);
+$pdf->Cell(70, 8, 'Amount (Ksh)', 1, 1, 'R');
 
-        $pdf->Cell(95, 8, $d['name'] . ' (' . $rate . ')', 1);
-        $pdf->Cell(95, 8, 'Ksh ' . number_format($deductionAmount, 2), 1, 1);
+$pdf->SetFont('Arial', '', 10);
+
+if (!empty($allowances)) {
+    foreach ($allowances as $a) {
+        $allowanceName = $a['name'] ?? 'Allowance';
+        $amount = (float)preg_replace(
+            '/[^0-9.\-]/',
+            '',
+            (string)($a['amount'] ?? '0')
+        );
+
+        $pdf->Cell(120, 8, substr($allowanceName, 0, 60), 1, 0);
+        $pdf->Cell(70, 8, number_format($amount, 2), 1, 1, 'R');
     }
 } else {
-    $pdf->Cell(0, 8, 'No deductions available.', 1, 1);
+    $pdf->Cell(190, 8, 'No allowances available.', 1, 1);
 }
-$pdf->Ln(10);
+
+$pdf->Ln(5);
+
+// --- Deductions ---
+$pdf->SetFont('Arial', 'B', 12);
+$pdf->Cell(0, 8, 'Deductions Breakdown', 0, 1);
+
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Cell(90, 8, 'Deduction', 1, 0);
+$pdf->Cell(35, 8, 'Rate', 1, 0, 'C');
+$pdf->Cell(65, 8, 'Amount (Ksh)', 1, 1, 'R');
+
+$pdf->SetFont('Arial', '', 10);
+
+if (!empty($deductions)) {
+    foreach ($deductions as $d) {
+        $raw = (string)($d['amount'] ?? '0');
+        $isPercentage = strpos($raw, '%') !== false;
+        $rate = $isPercentage ? $raw : '-';
+
+        $numericValue = (float)preg_replace('/[^0-9.\-]/', '', $raw);
+
+        $deductionAmount = $isPercentage
+            ? ($numericValue / 100) * (float)$payroll['base_salary']
+            : $numericValue;
+
+        $deductionName = $d['name'] ?? 'Deduction';
+
+        $pdf->Cell(90, 8, substr($deductionName, 0, 45), 1, 0);
+        $pdf->Cell(35, 8, $rate, 1, 0, 'C');
+        $pdf->Cell(65, 8, number_format($deductionAmount, 2), 1, 1, 'R');
+    }
+} else {
+    $pdf->Cell(190, 8, 'No deductions available.', 1, 1);
+}
+
+$pdf->Ln(7);
+
+// --- Payroll Workflow and Authorization ---
+$pdf->SetFont('Arial', 'B', 12);
+$pdf->Cell(0, 8, 'Payroll Preparation, Approval & Payment', 0, 1);
+
+$pdf->SetFont('Arial', '', 10);
+
+// Prepared By
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Cell(63, 8, 'PREPARED BY', 1, 0, 'C');
+$pdf->Cell(63, 8, 'APPROVED BY', 1, 0, 'C');
+$pdf->Cell(64, 8, 'PAID BY', 1, 1, 'C');
+
+$pdf->SetFont('Arial', '', 9);
+
+$pdf->Cell(
+    63, 9,
+    'Name: ' . pdfField($payroll['prepared_by'] ?? null, 16),
+    1, 0
+);
+$pdf->Cell(
+    63, 9,
+    'Name: ' . pdfField($payroll['approved_by'] ?? null, 16),
+    1, 0
+);
+$pdf->Cell(
+    64, 9,
+    'Name: ' . pdfField($payroll['accountant_name'] ?? null, 16),
+    1, 1
+);
+
+$pdf->Cell(
+    63, 9,
+    'Date: ' . pdfField($payroll['date_prepared'] ?? null, 16),
+    1, 0
+);
+$pdf->Cell(
+    63, 9,
+    'Date: ' . pdfField($payroll['approval_date'] ?? null, 16),
+    1, 0
+);
+$pdf->Cell(
+    64, 9,
+    'Date: ' . pdfField($payroll['payment_date'] ?? null, 16),
+    1, 1
+);
+
+$pdf->Cell(
+    63, 9,
+    'Status: ' . pdfField($payroll['preparation_status'] ?? null, 12),
+    1, 0
+);
+$pdf->Cell(
+    63, 9,
+    'Status: ' . pdfField($payroll['approval_status'] ?? null, 12),
+    1, 0
+);
+$pdf->Cell(
+    64, 9,
+    'Status: ' . pdfField($payroll['payment_status'] ?? null, 12),
+    1, 1
+);
+
+$pdf->Ln(5);
+
+// Signature lines for printed copies
+$pdf->SetFont('Arial', '', 10);
+$pdf->Cell(63, 8, 'Signature: __________________', 0, 0);
+$pdf->Cell(63, 8, 'Signature: __________________', 0, 0);
+$pdf->Cell(64, 8, 'Signature: __________________', 0, 1);
+
+$pdf->Ln(5);
 
 // --- Footer ---
-$pdf->SetFont('Arial', 'I', 10);
-$pdf->Cell(0, 10, 'This payslip was generated electronically by LynnTech ERP on ' . date('d M Y'), 0, 1, 'C');
+$pdf->SetFont('Arial', 'I', 8);
+$pdf->MultiCell(
+    0,
+    5,
+    'This payslip was generated electronically by LynnTech HR Manager on ' .
+    date('d M Y') . '.',
+    0,
+    'C'
+);
 
-$pdf->Output("I", "Payslip_{$payroll['full_name']}_{$monthText}_{$year}.pdf");
+// Clean up output buffer before PDF output
+if (ob_get_length()) {
+    ob_end_clean();
+}
+
+$safeName = preg_replace('/[^A-Za-z0-9_-]/', '_', $payroll['full_name']);
+$fileName = "Payslip_{$safeName}_{$monthText}_{$year}.pdf";
+
+$pdf->Output('I', $fileName);
+exit;
 ?>
