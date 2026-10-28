@@ -60,17 +60,10 @@ $payrollMonth = $monthDate->format('F');
 $payrollYear = (int) $monthDate->format('Y');
 
 // Fetch the saved workflow information for this employee and month.
+
+// Fetch existing payroll for the selected employee and month
 $stmt = $conn->prepare("
-    SELECT
-        prepared_by,
-        date_prepared,
-        preparation_status,
-        approved_by,
-        approval_date,
-        approval_status,
-        accountant_name,
-        payment_date,
-        payment_status
+    SELECT *
     FROM payroll_records
     WHERE user_id = ?
       AND month = ?
@@ -86,11 +79,18 @@ $stmt->bind_param(
 );
 
 $stmt->execute();
-$payrollRecord = $stmt->get_result()->fetch_assoc();
+
+$result = $stmt->get_result();
+$existingPayroll = $result->fetch_assoc();
+
 $stmt->close();
 
-// Defaults for months without a saved record.
-$payrollRecord = $payrollRecord ?: [
+// Determine whether this is a new or existing payroll
+$isExistingPayroll = !empty($existingPayroll);
+
+// Existing payroll values
+$payrollRecord = $existingPayroll ?: [
+    'payroll_no' => '',
     'prepared_by' => '',
     'date_prepared' => '',
     'preparation_status' => 'Pending',
@@ -101,6 +101,28 @@ $payrollRecord = $payrollRecord ?: [
     'payment_date' => '',
     'payment_status' => 'Pending Pay'
 ];
+
+// Load saved salary amounts
+if ($isExistingPayroll) {
+    $base_salary = (float) $existingPayroll['base_salary'];
+    $total_allowances = (float) $existingPayroll['total_allowances'];
+    $estimated_deductions = (float) $existingPayroll['total_deductions'];
+
+    $gross_pay = $base_salary + $total_allowances;
+    $net_pay = (float) $existingPayroll['net_pay'];
+}
+
+// Load saved allowance and deduction details
+$savedDetails = [];
+
+if ($isExistingPayroll && !empty($existingPayroll['details'])) {
+    $decoded = json_decode($existingPayroll['details'], true);
+
+    if (is_array($decoded)) {
+        $savedDetails = $decoded;
+    }
+}
+
 ?>
 
 <!DOCTYPE html>
@@ -118,16 +140,71 @@ $payrollRecord = $payrollRecord ?: [
     <h1 class="text-2xl font-bold text-gray-700 mb-6">Process Payroll - <?= htmlspecialchars($user['full_name']) ?></h1>
 
     <!-- Employee Info -->
-    <div class="bg-white shadow rounded-lg p-5 mb-6">
-        <h2 class="text-lg font-semibold text-gray-700 mb-3">Employee Information</h2>
-        <p><strong>Email:</strong> <?= htmlspecialchars($user['email']) ?></p>
-        <p><strong>National ID:</strong> <?= htmlspecialchars($user['national_id']) ?></p>
+   
+<!-- Employee Info -->
+<div class="bg-white shadow rounded-lg p-5 mb-6">
+
+    <h2 class="text-lg font-semibold text-gray-700 mb-3">
+        Employee Information
+    </h2>
+
+    <div class="space-y-2">
+
+        <p>
+            <strong>Email:</strong>
+            <?= htmlspecialchars($user['email'] ?? '-') ?>
+        </p>
+
+        <p>
+            <strong>National ID:</strong>
+            <?= htmlspecialchars($user['national_id'] ?? '-') ?>
+        </p>
+
+        <p>
+            <strong>Bank Name:</strong>
+            <?= htmlspecialchars($salary['bank_name'] ?? '-') ?>
+        </p>
+
+        <p>
+            <strong>Bank Account:</strong>
+            <?= htmlspecialchars($salary['bank_account'] ?? '-') ?>
+        </p>
+
     </div>
+
+</div>
+
 
     <!-- Base Salary -->
     <div class="bg-white shadow rounded-lg p-5 mb-6">
         <h2 class="text-lg font-semibold text-gray-700 mb-3">Base Salary</h2>
-        <p><strong>Base Salary:</strong> Ksh <?= number_format($base_salary, 2) ?></p>
+        
+<!-- Base Salary -->
+<div class="bg-white shadow rounded-lg p-5 mb-6">
+
+
+    <p class="mb-4">
+        <strong>Base Salary:</strong>
+        Ksh <?= number_format($base_salary, 2) ?>
+    </p>
+
+    <div>
+        <label class="block text-gray-700 font-medium mb-2">
+            Payroll No.
+        </label>
+
+        <input
+            type="text"
+            id="payrollNo"
+            maxlength="100"
+            value="<?= htmlspecialchars($payrollRecord['payroll_no'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+            placeholder="Enter Payroll Number"
+            class="border rounded px-3 py-2 w-full md:w-1/2"
+        >
+    </div>
+
+</div>
+
     </div>
 
     <!-- Allowances -->
@@ -140,14 +217,37 @@ $payrollRecord = $payrollRecord ?: [
                     <th class="px-4 py-2 text-left">Amount (Ksh)</th>
                 </tr>
             </thead>
-            <tbody>
-                <?php while ($a = $allowances->fetch_assoc()): ?>
-                    <tr class="border-b">
-                        <td class="px-4 py-2"><?= htmlspecialchars($a['allowance_name']) ?></td>
-                        <td class="px-4 py-2"><?= number_format($a['amount'], 2) ?></td>
-                    </tr>
-                <?php endwhile; ?>
-            </tbody>
+            
+<tbody>
+<?php if ($isExistingPayroll): ?>
+
+    <?php foreach (($savedDetails['allowances'] ?? []) as $a): ?>
+        <tr class="border-b">
+            <td class="px-4 py-2">
+                <?= htmlspecialchars($a['name'] ?? '') ?>
+            </td>
+            <td class="px-4 py-2">
+                <?= number_format((float)($a['amount'] ?? 0), 2) ?>
+            </td>
+        </tr>
+    <?php endforeach; ?>
+
+<?php else: ?>
+
+    <?php while ($a = $allowances->fetch_assoc()): ?>
+        <tr class="border-b">
+            <td class="px-4 py-2">
+                <?= htmlspecialchars($a['allowance_name']) ?>
+            </td>
+            <td class="px-4 py-2">
+                <?= number_format((float)$a['amount'], 2) ?>
+            </td>
+        </tr>
+    <?php endwhile; ?>
+
+<?php endif; ?>
+</tbody>
+
         </table>
 
         <!-- Manual Add Allowance -->
@@ -168,14 +268,37 @@ $payrollRecord = $payrollRecord ?: [
                     <th class="px-4 py-2 text-left">Rate / Amount</th>
                 </tr>
             </thead>
-            <tbody>
-                <?php while ($d = $deductions->fetch_assoc()): ?>
-                    <tr class="border-b">
-                        <td class="px-4 py-2"><?= htmlspecialchars($d['deduction_name']) ?></td>
-                        <td class="px-4 py-2"><?= htmlspecialchars($d['rate']) ?>%</td>
-                    </tr>
-                <?php endwhile; ?>
-            </tbody>
+            
+<tbody>
+<?php if ($isExistingPayroll): ?>
+
+    <?php foreach (($savedDetails['deductions'] ?? []) as $d): ?>
+        <tr class="border-b">
+            <td class="px-4 py-2">
+                <?= htmlspecialchars($d['name'] ?? '') ?>
+            </td>
+            <td class="px-4 py-2">
+                <?= htmlspecialchars((string)($d['amount'] ?? 0)) ?>
+            </td>
+        </tr>
+    <?php endforeach; ?>
+
+<?php else: ?>
+
+    <?php while ($d = $deductions->fetch_assoc()): ?>
+        <tr class="border-b">
+            <td class="px-4 py-2">
+                <?= htmlspecialchars($d['deduction_name']) ?>
+            </td>
+            <td class="px-4 py-2">
+                <?= htmlspecialchars($d['rate']) ?>%
+            </td>
+        </tr>
+    <?php endwhile; ?>
+
+<?php endif; ?>
+</tbody>
+
         </table>
 
         <!-- Manual Add Deduction -->
@@ -329,7 +452,12 @@ $payrollRecord = $payrollRecord ?: [
     <p><strong>Estimated Deductions:</strong> Ksh <span id="totalDeductions"><?= number_format($estimated_deductions, 2) ?></span></p>
     <p class="text-blue-700 font-semibold"><strong>Net Pay:</strong> Ksh <span id="netPay"><?= number_format($net_pay, 2) ?></span></p>
 
-    <button id="savePayrollBtn" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded">Save Payroll</button>
+    <button
+    id="savePayrollBtn"
+    class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded"
+>
+    <?= $isExistingPayroll ? 'Update Payroll' : 'Save Payroll' ?>
+</button>
 
     <a href="payroll_list.php"
    class="mt-4 inline-block bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded text-center">
@@ -522,6 +650,7 @@ $("#savePayrollBtn").on("click", function (event) {
 
     const payload = {
         user_id: <?= (int) $user_id ?>,
+        payroll_no: $("#payrollNo").val().trim(),
         full_name: <?= json_encode($user['full_name'] ?? '') ?>,
         base_salary: baseSalary,
         total_allowances: grossPay - baseSalary,
@@ -570,9 +699,36 @@ $("#savePayrollBtn").on("click", function (event) {
         alert(message);
     })
     .always(function () {
-        button.prop("disabled", false).text("Save Payroll");
-    });
+    button.prop("disabled", false).text(
+        <?= json_encode($isExistingPayroll ? 'Update Payroll' : 'Save Payroll') ?>
+    );
 });
+
+});
+
+
+$("#payrollMonth").on("change", function () {
+
+    const selectedMonth = $(this).val();
+    const selectedYear = $("#payrollYear").val();
+
+    const months = [
+        "January", "February", "March", "April",
+        "May", "June", "July", "August",
+        "September", "October", "November", "December"
+    ];
+
+    const monthNumber = String(
+        months.indexOf(selectedMonth) + 1
+    ).padStart(2, "0");
+
+    const userId = <?= (int) $user_id ?>;
+
+    window.location.href =
+        "process_payroll.php?id=" + userId +
+        "&month=" + selectedYear + "-" + monthNumber;
+});
+
 </script>
 </body>
 </html>

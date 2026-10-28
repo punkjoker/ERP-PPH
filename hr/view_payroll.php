@@ -10,12 +10,30 @@ $monthName = date('F Y', strtotime($selectedMonth . '-01'));
 $monthText = date('F', mktime(0, 0, 0, $monthNum, 10));
 
 // Fetch payroll record
+
 $stmt = $conn->prepare("
-    SELECT pr.*, u.email, u.national_id, u.status
+    SELECT
+        pr.*,
+        u.email,
+        u.national_id,
+        u.status,
+        es.bank_name,
+        es.bank_account
     FROM payroll_records pr
-    INNER JOIN users u ON pr.user_id = u.user_id
-    WHERE pr.user_id = ? AND pr.month = ? AND pr.year = ?
+
+    INNER JOIN users u
+        ON pr.user_id = u.user_id
+
+    LEFT JOIN employee_salary es
+        ON pr.user_id = es.user_id
+
+    WHERE pr.user_id = ?
+      AND pr.month = ?
+      AND pr.year = ?
+
+    LIMIT 1
 ");
+
 $stmt->bind_param("isi", $user_id, $monthText, $year);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -48,19 +66,72 @@ $manualDeductions = $details['deductions'] ?? [];
         Payroll Details - <?= htmlspecialchars($payroll['full_name']) ?> (<?= $monthName ?>)
     </h1>
 
-    <div class="grid grid-cols-2 gap-4 mb-6">
-        <div>
-            <p><strong>Email:</strong> <?= htmlspecialchars($payroll['email']) ?></p>
-            <p><strong>National ID:</strong> <?= htmlspecialchars($payroll['national_id']) ?></p>
+    
+<!-- Employee and Payroll Information -->
+<div class="bg-gray-50 rounded-lg p-5 mb-6">
+
+    <h2 class="text-lg font-semibold text-gray-700 mb-4">
+        Employee & Payroll Information
+    </h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        <!-- Left Column -->
+        <div class="space-y-3">
+
+            <p>
+                <strong>Email:</strong>
+                <?= htmlspecialchars($payroll['email'] ?? '-') ?>
+            </p>
+
+            <p>
+                <strong>National ID:</strong>
+                <?= htmlspecialchars($payroll['national_id'] ?? '-') ?>
+            </p>
+
+            <p>
+                <strong>Payroll No:</strong>
+                <?= htmlspecialchars($payroll['payroll_no'] ?: '-') ?>
+            </p>
+
         </div>
-        <div>
-            <p><strong>Status:</strong> 
-                <span class="px-2 py-1 rounded-full text-sm font-medium <?= $payroll['status'] === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' ?>">
-                    <?= htmlspecialchars($payroll['status']) ?>
+
+        <!-- Right Column -->
+        <div class="space-y-3">
+
+            <p>
+                <strong>Bank Name:</strong>
+                <?= htmlspecialchars($payroll['bank_name'] ?: '-') ?>
+            </p>
+
+            <p>
+                <strong>Bank Account Number:</strong>
+                <?= htmlspecialchars($payroll['bank_account'] ?: '-') ?>
+            </p>
+
+            <p>
+                <strong>Employee Status:</strong>
+
+                <?php
+                    $status = $payroll['status'] ?? 'inactive';
+                ?>
+
+                <span class="px-2 py-1 rounded-full text-sm font-medium
+                    <?= $status === 'active'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-red-100 text-red-700' ?>">
+
+                    <?= htmlspecialchars($status) ?>
+
                 </span>
             </p>
+
         </div>
+
     </div>
+
+</div>
+
 
     <div class="bg-gray-50 rounded-lg p-4 mb-6">
         <h2 class="text-lg font-semibold mb-2 text-gray-700">Summary</h2>

@@ -23,20 +23,31 @@ if ($user_id <= 0) {
 }
 
 // Fetch payroll record and workflow information
+
 $stmt = $conn->prepare("
     SELECT
         pr.*,
         u.full_name,
         u.email,
         u.national_id,
-        u.status
+        u.status,
+        es.bank_name,
+        es.bank_account
     FROM payroll_records pr
-    INNER JOIN users u ON pr.user_id = u.user_id
+
+    INNER JOIN users u
+        ON pr.user_id = u.user_id
+
+    LEFT JOIN employee_salary es
+        ON pr.user_id = es.user_id
+
     WHERE pr.user_id = ?
       AND pr.month = ?
       AND pr.year = ?
+
     LIMIT 1
 ");
+
 
 $stmt->bind_param("isi", $user_id, $monthText, $year);
 $stmt->execute();
@@ -85,19 +96,84 @@ $pdf->SetFont('Arial', 'B', 11);
 $pdf->Cell(0, 7, 'Payroll Period: ' . $monthNameYear, 0, 1, 'C');
 $pdf->Ln(5);
 
+
 // --- Employee Details ---
 $pdf->SetFont('Arial', 'B', 12);
 $pdf->Cell(0, 8, 'Employee Details', 0, 1, 'L');
 
 $pdf->SetFont('Arial', '', 10);
-$pdf->Cell(95, 8, 'Name: ' . $payroll['full_name'], 1, 0);
-$pdf->Cell(95, 8, 'Status: ' . ucfirst($payroll['status']), 1, 1);
 
-$pdf->Cell(95, 8, 'Email: ' . $payroll['email'], 1, 0);
-$pdf->Cell(95, 8, 'National ID: ' . $payroll['national_id'], 1, 1);
+// Row 1: Employee Name and Status
+$pdf->Cell(
+    95, 8,
+    'Name: ' . ($payroll['full_name'] ?? '-'),
+    1, 0
+);
 
-$pdf->Cell(95, 8, 'Month: ' . $monthText, 1, 0);
-$pdf->Cell(95, 8, 'Year: ' . $year, 1, 1);
+$pdf->Cell(
+    95, 8,
+    'Status: ' . ucfirst($payroll['status'] ?? '-'),
+    1, 1
+);
+
+// Row 2: Email and National ID
+$pdf->Cell(
+    95, 8,
+    'Email: ' . ($payroll['email'] ?? '-'),
+    1, 0
+);
+
+$pdf->Cell(
+    95, 8,
+    'National ID: ' . ($payroll['national_id'] ?? '-'),
+    1, 1
+);
+
+// Row 3: Payroll Number and Bank Name
+$pdf->Cell(
+    95, 8,
+    'Payroll No: ' . (
+        !empty($payroll['payroll_no'])
+            ? $payroll['payroll_no']
+            : '-'
+    ),
+    1, 0
+);
+
+$pdf->Cell(
+    95, 8,
+    'Bank Name: ' . (
+        !empty($payroll['bank_name'])
+            ? $payroll['bank_name']
+            : '-'
+    ),
+    1, 1
+);
+
+// Row 4: Bank Account Number
+$pdf->Cell(
+    190, 8,
+    'Bank Account Number: ' . (
+        !empty($payroll['bank_account'])
+            ? $payroll['bank_account']
+            : '-'
+    ),
+    1, 1
+);
+
+// Row 5: Payroll Month and Year
+$pdf->Cell(
+    95, 8,
+    'Month: ' . $monthText,
+    1, 0
+);
+
+$pdf->Cell(
+    95, 8,
+    'Year: ' . $year,
+    1, 1
+);
+
 $pdf->Ln(6);
 
 // --- Salary Summary ---

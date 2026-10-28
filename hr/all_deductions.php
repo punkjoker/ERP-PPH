@@ -50,6 +50,9 @@ ksort($deductionsList);
 // ✅ Prepare totals
 $totalsAllowances = array_fill_keys(array_keys($allowancesList), 0);
 $totalsDeductions = array_fill_keys(array_keys($deductionsList), 0);
+$totalGrossPay = 0;
+$totalAllDeductions = 0;
+$totalNetPay = 0;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -105,10 +108,25 @@ $totalsDeductions = array_fill_keys(array_keys($deductionsList), 0);
             <?php foreach ($allowancesList as $allow): ?>
                 <th class="border px-2 py-1"><?= htmlspecialchars($allow) ?></th>
             <?php endforeach; ?>
-            <?php foreach ($deductionsList as $ded): ?>
-                <th class="border px-2 py-1"><?= htmlspecialchars($ded) ?></th>
-            <?php endforeach; ?>
-            <th class="border px-2 py-1">Net Pay</th>
+           
+<?php foreach ($deductionsList as $ded): ?>
+    <th class="border px-2 py-1">
+        <?= htmlspecialchars($ded) ?>
+    </th>
+<?php endforeach; ?>
+
+<th class="border px-2 py-1 bg-green-100">
+    Gross Pay
+</th>
+
+<th class="border px-2 py-1 bg-red-100">
+    Total Deductions
+</th>
+
+<th class="border px-2 py-1 bg-blue-100">
+    Net Pay
+</th>
+
         </tr>
     </thead>
     <tbody>
@@ -154,25 +172,85 @@ $totalsDeductions = array_fill_keys(array_keys($deductionsList), 0);
             }
 
             // Net Pay
-            $netPay = $payrolls[$emp['user_id']]['net_pay'] ?? 0;
-            echo "<td class='border px-2 py-1 font-semibold'>" . number_format($netPay, 2) . "</td>";
+           
+// Get saved payroll information
+$payroll = $payrolls[$emp['user_id']] ?? [];
+
+// Calculate gross pay
+$baseSalary = (float) ($payroll['base_salary'] ?? 0);
+$totalEmployeeAllowances = (float) ($payroll['total_allowances'] ?? 0);
+
+$grossPay = $baseSalary + $totalEmployeeAllowances;
+
+// Total deductions accumulated for this employee
+$employeeDeductions = (float) ($payroll['total_deductions'] ?? 0);
+
+// Saved net pay
+$netPay = (float) ($payroll['net_pay'] ?? 0);
+
+// Accumulate grand totals
+$totalGrossPay += $grossPay;
+$totalAllDeductions += $employeeDeductions;
+$totalNetPay += $netPay;
+
+// Gross Pay column
+echo "<td class='border px-2 py-1 font-semibold bg-green-50'>"
+    . number_format($grossPay, 2)
+    . "</td>";
+
+// Total Deductions column
+echo "<td class='border px-2 py-1 font-semibold text-red-700 bg-red-50'>"
+    . number_format($employeeDeductions, 2)
+    . "</td>";
+
+// Net Pay column
+echo "<td class='border px-2 py-1 font-semibold text-blue-700'>"
+    . number_format($netPay, 2)
+    . "</td>";
+
             ?>
         </tr>
         <?php endforeach; ?>
     </tbody>
 
-    <tfoot class="bg-gray-200 font-semibold">
-        <tr>
-            <td class="border px-2 py-1">Total</td>
-            <?php foreach ($totalsAllowances as $t): ?>
-                <td class="border px-2 py-1"><?= number_format($t,2) ?></td>
-            <?php endforeach; ?>
-            <?php foreach ($totalsDeductions as $t): ?>
-                <td class="border px-2 py-1"><?= number_format($t,2) ?></td>
-            <?php endforeach; ?>
-            <td class="border px-2 py-1"></td>
-        </tr>
-    </tfoot>
+    
+<tfoot class="bg-gray-200 font-semibold">
+    <tr>
+        <td class="border px-2 py-2">
+            GRAND TOTAL
+        </td>
+
+        <!-- Individual allowance totals -->
+        <?php foreach ($totalsAllowances as $t): ?>
+            <td class="border px-2 py-2">
+                <?= number_format($t, 2) ?>
+            </td>
+        <?php endforeach; ?>
+
+        <!-- Individual deduction totals -->
+        <?php foreach ($totalsDeductions as $t): ?>
+            <td class="border px-2 py-2">
+                <?= number_format($t, 2) ?>
+            </td>
+        <?php endforeach; ?>
+
+        <!-- Gross Pay Total -->
+        <td class="border px-2 py-2 bg-green-100">
+            <?= number_format($totalGrossPay, 2) ?>
+        </td>
+
+        <!-- Total Deductions -->
+        <td class="border px-2 py-2 bg-red-100 text-red-700">
+            <?= number_format($totalAllDeductions, 2) ?>
+        </td>
+
+        <!-- Net Pay Total -->
+        <td class="border px-2 py-2 bg-blue-100 text-blue-700">
+            <?= number_format($totalNetPay, 2) ?>
+        </td>
+    </tr>
+</tfoot>
+
 </table>
 </div>
 </body>

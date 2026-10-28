@@ -15,6 +15,7 @@ $user_id = filter_var(
 );
 
 $full_name = trim($_POST['full_name'] ?? '');
+$payroll_no = trim($_POST['payroll_no'] ?? '');
 $base_salary = (float) ($_POST['base_salary'] ?? 0);
 $total_allowances = (float) ($_POST['total_allowances'] ?? 0);
 $total_deductions = (float) ($_POST['total_deductions'] ?? 0);
@@ -45,7 +46,10 @@ if (!is_string($details) || json_decode($details) === null) {
     http_response_code(400);
     exit('Invalid payroll details.');
 }
-
+if (strlen($payroll_no) > 100) {
+    http_response_code(400);
+    exit('Payroll number cannot exceed 100 characters.');
+}
 // Read workflow fields.
 $prepared_by = trim($_POST['prepared_by'] ?? '');
 $date_prepared = trim($_POST['date_prepared'] ?? '');
@@ -144,107 +148,142 @@ try {
     $existing = $check->get_result()->fetch_assoc();
     $check->close();
 
-    if ($existing) {
-        // Update salary and workflow details together.
-        $stmt = $conn->prepare("
-            UPDATE payroll_records
-            SET full_name = ?,
-                base_salary = ?,
-                total_allowances = ?,
-                total_deductions = ?,
-                net_pay = ?,
-                details = ?,
-                prepared_by = ?,
-                date_prepared = ?,
-                preparation_status = ?,
-                approved_by = ?,
-                approval_date = ?,
-                approval_status = ?,
-                accountant_name = ?,
-                payment_date = ?,
-                payment_status = ?,
-                created_at = NOW()
-            WHERE user_id = ? AND month = ? AND year = ?
-        ");
+ 
+if ($existing) {
 
-        $stmt->bind_param(
-            'sddddssssssssssisi',
-            $full_name,
-            $base_salary,
-            $total_allowances,
-            $total_deductions,
-            $net_pay,
-            $details,
-            $prepared_by,
-            $date_prepared,
-            $preparation_status,
-            $approved_by,
-            $approval_date,
-            $approval_status,
-            $accountant_name,
-            $payment_date,
-            $payment_status,
-            $user_id,
-            $month,
-            $year
-        );
+    // Update existing payroll record
+    $stmt = $conn->prepare("
+        UPDATE payroll_records
+        SET payroll_no = ?,
+            full_name = ?,
+            base_salary = ?,
+            total_allowances = ?,
+            total_deductions = ?,
+            net_pay = ?,
+            details = ?,
+            prepared_by = ?,
+            date_prepared = ?,
+            preparation_status = ?,
+            approved_by = ?,
+            approval_date = ?,
+            approval_status = ?,
+            accountant_name = ?,
+            payment_date = ?,
+            payment_status = ?
+        WHERE payroll_id = ?
+    ");
 
-        $stmt->execute();
-        $stmt->close();
+    $payroll_id = (int) $existing['payroll_id'];
 
-        echo 'Payroll and workflow details updated successfully for '
-            . htmlspecialchars($month . ' ' . $year, ENT_QUOTES, 'UTF-8')
-            . '.';
+    $stmt->bind_param(
+        'ssddddssssssssssi',
+        $payroll_no,
+        $full_name,
+        $base_salary,
+        $total_allowances,
+        $total_deductions,
+        $net_pay,
+        $details,
+        $prepared_by,
+        $date_prepared,
+        $preparation_status,
+        $approved_by,
+        $approval_date,
+        $approval_status,
+        $accountant_name,
+        $payment_date,
+        $payment_status,
+        $payroll_id
+    );
 
-    } else {
-        $stmt = $conn->prepare("
-            INSERT INTO payroll_records (
-                user_id, full_name, base_salary, total_allowances,
-                total_deductions, net_pay, month, year, details,
-                prepared_by, date_prepared, preparation_status,
-                approved_by, approval_date, approval_status,
-                accountant_name, payment_date, payment_status
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ");
+    $stmt->execute();
+    $stmt->close();
 
-        $stmt->bind_param(
-            'isddddsissssssssss',
-            $user_id,
-            $full_name,
-            $base_salary,
-            $total_allowances,
-            $total_deductions,
-            $net_pay,
-            $month,
-            $year,
-            $details,
-            $prepared_by,
-            $date_prepared,
-            $preparation_status,
-            $approved_by,
-            $approval_date,
-            $approval_status,
-            $accountant_name,
-            $payment_date,
-            $payment_status
-        );
+    echo 'Payroll updated successfully for '
+        . htmlspecialchars($month . ' ' . $year, ENT_QUOTES, 'UTF-8')
+        . '.';
 
-        $stmt->execute();
-        $stmt->close();
+}
 
-        echo 'Payroll saved successfully for '
-            . htmlspecialchars($month . ' ' . $year, ENT_QUOTES, 'UTF-8')
-            . '.';
-    }
+
+ 
+else {
+
+    // Insert a new payroll record
+    $stmt = $conn->prepare("
+        INSERT INTO payroll_records (
+            user_id,
+            payroll_no,
+            full_name,
+            base_salary,
+            total_allowances,
+            total_deductions,
+            net_pay,
+            month,
+            year,
+            details,
+            prepared_by,
+            date_prepared,
+            preparation_status,
+            approved_by,
+            approval_date,
+            approval_status,
+            accountant_name,
+            payment_date,
+            payment_status
+        )
+        VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?, ?, ?
+        )
+    ");
+
+    $stmt->bind_param(
+        'issddddsissssssssss',
+        $user_id,
+        $payroll_no,
+        $full_name,
+        $base_salary,
+        $total_allowances,
+        $total_deductions,
+        $net_pay,
+        $month,
+        $year,
+        $details,
+        $prepared_by,
+        $date_prepared,
+        $preparation_status,
+        $approved_by,
+        $approval_date,
+        $approval_status,
+        $accountant_name,
+        $payment_date,
+        $payment_status
+    );
+
+   
+    $stmt->execute();
+    $stmt->close();
+
+    echo 'Payroll saved successfully for '
+        . htmlspecialchars($month . ' ' . $year, ENT_QUOTES, 'UTF-8')
+        . '.';
+}
 
 } catch (InvalidArgumentException $e) {
     http_response_code(400);
-    echo htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
+
+    echo htmlspecialchars(
+        $e->getMessage(),
+        ENT_QUOTES,
+        'UTF-8'
+    );
 
 } catch (Throwable $e) {
     error_log('Payroll save error: ' . $e->getMessage());
+
     http_response_code(500);
+
     echo 'Unable to save payroll. Please check the server error log.';
 }
 ?>

@@ -1,11 +1,27 @@
 <?php
 require 'db_con.php';
+require_once 'kenya_statutory_rules.php';
+
+$statutoryRules = kenyaStatutoryRules();
 
 // ✅ Handle Add Deduction
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_deduction'])) {
     $name = trim($_POST['deduction_name']);
     $rate = floatval($_POST['rate']);
     $desc = trim($_POST['description']);
+
+    $protectedNames = [
+    'PAYE',
+    'NSSF',
+    'SHIF',
+    'AHL',
+    'AFFORDABLE HOUSING LEVY',
+    'HOUSING LEVY'
+];
+
+if (in_array(strtoupper(trim($name)), $protectedNames, true)) {
+    die('This is a system-managed statutory deduction and cannot be added manually.');
+}
 
     if (!empty($name) && $rate > 0) {
         $stmt = $conn->prepare("INSERT INTO deductions (deduction_name, rate, description) VALUES (?, ?, ?)");
@@ -69,6 +85,130 @@ function closeModal() {
 
 <div class="ml-64 p-6 max-w-6xl mx-auto">
     <h1 class="text-2xl font-bold text-gray-700 mb-6">Payroll Deductions</h1>
+
+<!-- Mandatory Kenyan Statutory Deductions -->
+<div class="bg-white shadow-md rounded-lg p-6 mb-8">
+
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-blue-800">
+            Mandatory Kenyan Statutory Deductions
+        </h2>
+
+        <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold">
+            System Managed
+        </span>
+    </div>
+
+    <p class="text-sm text-gray-600 mb-5">
+        These statutory rules are defined by the system.
+        Employee deductions will be calculated automatically
+        when processing payroll.
+    </p>
+
+    <div class="overflow-x-auto">
+        <table class="min-w-full border text-sm">
+
+            <thead class="bg-blue-100 text-blue-900">
+                <tr>
+                    <th class="border px-3 py-2 text-left">Deduction</th>
+                    <th class="border px-3 py-2 text-left">Calculation Type</th>
+                    <th class="border px-3 py-2 text-left">Rate</th>
+                    <th class="border px-3 py-2 text-left">Description</th>
+                    <th class="border px-3 py-2">Status</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                <?php foreach ($statutoryRules as $code => $rule): ?>
+                    <tr class="hover:bg-gray-50">
+
+                        <td class="border px-3 py-2 font-medium">
+                            <?= htmlspecialchars($rule['name']) ?>
+                        </td>
+
+                        <td class="border px-3 py-2">
+                            <?= htmlspecialchars($rule['type']) ?>
+                        </td>
+
+                        <td class="border px-3 py-2">
+                            <?php if ($code === 'PAYE'): ?>
+                                10% - 35%
+                            <?php else: ?>
+                                <?= number_format($rule['rate'], 2) ?>%
+                            <?php endif; ?>
+                        </td>
+
+                        <td class="border px-3 py-2">
+                            <?= htmlspecialchars($rule['description']) ?>
+                        </td>
+
+                        <td class="border px-3 py-2 text-center">
+                            <span class="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs">
+                                Protected
+                            </span>
+                        </td>
+
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+
+        </table>
+    </div>
+
+    <!-- PAYE Brackets -->
+    <div class="mt-6">
+        <h3 class="font-semibold text-gray-700 mb-3">
+            PAYE Monthly Tax Brackets
+        </h3>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full border text-sm">
+
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="border px-3 py-2 text-left">
+                            Taxable Income Band
+                        </th>
+                        <th class="border px-3 py-2 text-left">
+                            Tax Rate
+                        </th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    <?php foreach ($statutoryRules['PAYE']['bands'] as $index => $band): ?>
+                        <tr>
+                            <td class="border px-3 py-2">
+                                <?php
+                                if ($band['amount'] === null) {
+                                    echo 'Remaining taxable income';
+                                } else {
+                                    echo $index === 0 ? 'First ' : 'Next ';
+                                    echo 'Ksh ' . number_format($band['amount']);
+                                }
+                                ?>
+                            </td>
+
+                            <td class="border px-3 py-2">
+                                <?= $band['rate'] ?>%
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+
+            </table>
+        </div>
+
+        <p class="text-sm text-gray-600 mt-3">
+            Resident employee personal relief:
+            <strong>
+                Ksh <?= number_format($statutoryRules['PAYE']['personal_relief'], 2) ?>
+            </strong>
+            per month.
+        </p>
+    </div>
+
+</div>
 
     <!-- ✅ Add Deduction Form -->
     <div class="bg-white shadow-md rounded-lg p-6 mb-8">

@@ -1,6 +1,66 @@
 <?php
 include 'db_con.php';
 
+
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+$conn->set_charset('utf8mb4');
+
+function e($value) {
+    return htmlspecialchars(
+        (string)($value ?? ''),
+        ENT_QUOTES,
+        'UTF-8'
+    );
+}
+
+// Handle trip approval updates
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    isset($_POST['update_approval'])
+) {
+    $trip_id = (int)($_POST['trip_id'] ?? 0);
+    $approved_by = trim($_POST['approved_by'] ?? '');
+    $approval_status = trim($_POST['approval_status'] ?? '');
+
+    if ($trip_id <= 0) {
+        die('Invalid trip ID.');
+    }
+
+    if (!in_array($approval_status, ['Pending', 'Approved'], true)) {
+        die('Invalid approval status.');
+    }
+
+    if ($approval_status === 'Approved' && $approved_by === '') {
+        die('Please enter the name of the person approving this trip.');
+    }
+
+    // Pending trips should not retain an approver.
+    if ($approval_status === 'Pending') {
+        $approved_by = null;
+    }
+
+    $stmt = $conn->prepare("
+        UPDATE trips
+        SET approval_status = ?,
+            approved_by = ?
+        WHERE id = ?
+    ");
+
+    $stmt->bind_param(
+        'ssi',
+        $approval_status,
+        $approved_by,
+        $trip_id
+    );
+
+    $stmt->execute();
+    $stmt->close();
+
+    header('Location: ' . $_SERVER['PHP_SELF'] . '?updated=1');
+    exit;
+}
+
+
 // --- Handle Trip Saving ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['vehicle_id'])) {
   $vehicle_id = $_POST['vehicle_id'];
@@ -185,6 +245,9 @@ $trips = $conn->query("SELECT * FROM trips $where_sql ORDER BY created_at DESC")
             <th class="border p-2">Delivery Name</th>
             <th class="border p-2">Delivery Date</th>
             <th class="border p-2">Created At</th>
+            <th class="border p-2">Approval Status</th>
+<th class="border p-2">Approved By</th>
+<th class="border p-2">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -199,12 +262,178 @@ $trips = $conn->query("SELECT * FROM trips $where_sql ORDER BY created_at DESC")
               <td class="border p-2"><?= htmlspecialchars($row['delivery_name']) ?></td>
               <td class="border p-2"><?= htmlspecialchars($row['delivery_date']) ?></td>
               <td class="border p-2"><?= htmlspecialchars($row['created_at']) ?></td>
+              
+<!-- Approval Status -->
+<td class="border p-2 text-center">
+    <?php
+    $status = $row['approval_status'] ?? 'Pending';
+    ?>
+
+    <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold
+        <?= $status === 'Approved'
+            ? 'bg-green-100 text-green-700'
+            : 'bg-yellow-100 text-yellow-700' ?>">
+
+        <?= e($status) ?>
+    </span>
+</td>
+
+<!-- Approved By -->
+<td class="border p-2">
+    <?= e($row['approved_by'] ?: 'Not Approved') ?>
+</td>
+
+<!-- Edit Button -->
+<td class="border p-2 text-center">
+
+    <button
+        type="button"
+        class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs"
+        onclick='openApprovalModal(
+            <?= (int)$row["id"] ?>,
+            <?= json_encode($row["approval_status"] ?? "Pending", JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+            <?= json_encode($row["approved_by"] ?? "", JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP) ?>
+        )'
+    >
+        Edit
+    </button>
+
+</td>
+
             </tr>
           <?php endwhile; ?>
         </tbody>
       </table>
     </div>
   </div>
+
+<!-- Edit Trip Approval Modal -->
+<div
+    id="approvalModal"
+    class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4"
+>
+    <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
+
+        <h2 class="text-xl font-semibold text-blue-700 mb-5">
+            Update Trip Approval
+        </h2>
+
+        <form method="POST">
+
+            <input
+                type="hidden"
+                name="trip_id"
+                id="editTripId"
+            >
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    Approval Status
+                </label>
+
+                <select
+                    name="approval_status"
+                    id="editApprovalStatus"
+                    required
+                    onchange="toggleApproverRequired()"
+                    class="w-full p-2 border rounded-lg"
+                >
+                    <option value="Pending">Pending</option>
+                    <option value="Approved">Approved</option>
+                </select>
+            </div>
+
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    Approved By
+                </label>
+
+                <input
+                    type="text"
+                    name="approved_by"
+                    id="editApprovedBy"
+                    placeholder="Enter approver's name"
+                    class="w-full p-2 border rounded-lg"
+                >
+            </div>
+
+            <div class="flex justify-end gap-3">
+
+                <button
+                    type="button"
+                    onclick="closeApprovalModal()"
+                    class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded"
+                >
+                    Cancel
+                </button>
+
+                <button
+                    type="submit"
+                    name="update_approval"
+                    value="1"
+                    class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+                >
+                    Update Approval
+                </button>
+
+            </div>
+
+        </form>
+    </div>
+</div>
+
+<script>
+function openApprovalModal(id, status, approvedBy) {
+    document.getElementById('editTripId').value = id;
+
+    document.getElementById('editApprovalStatus').value =
+        status || 'Pending';
+
+    document.getElementById('editApprovedBy').value =
+        approvedBy || '';
+
+    toggleApproverRequired();
+
+    const modal = document.getElementById('approvalModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeApprovalModal() {
+    const modal = document.getElementById('approvalModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+function toggleApproverRequired() {
+    const status = document.getElementById('editApprovalStatus').value;
+    const approvedBy = document.getElementById('editApprovedBy');
+
+    approvedBy.required = status === 'Approved';
+    approvedBy.disabled = status === 'Pending';
+
+    if (status === 'Pending') {
+        approvedBy.value = '';
+    }
+}
+
+// Close by clicking outside
+document.getElementById('approvalModal').addEventListener(
+    'click',
+    function(event) {
+        if (event.target === this) {
+            closeApprovalModal();
+        }
+    }
+);
+
+// Close using Escape
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeApprovalModal();
+    }
+});
+</script>
 
 </body>
 </html>
