@@ -1,336 +1,194 @@
 
 <?php
-session_start();
+include 'db_con.php';
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+$conn->set_charset("utf8mb4");
 
-/*
-|--------------------------------------------------------------------------
-| Error handling
-|--------------------------------------------------------------------------
-| Detailed errors are logged on the server instead of being exposed
-| to users in production.
-*/
-ini_set('display_errors', '0');
-ini_set('log_errors', '1');
+header('Content-Type: text/plain; charset=utf-8');
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    exit("error: Invalid request method.");
+}
 
 try {
-    require_once __DIR__ . '/db_con.php';
-
-    // Check database connection
-    if (!isset($conn) || !($conn instanceof mysqli)) {
-        throw new RuntimeException(
-            'Database connection was not initialized correctly.'
-        );
-    }
-
-    $conn->set_charset('utf8mb4');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Accept POST requests only
-    |--------------------------------------------------------------------------
-    */
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        header('Location: leaves_request.php');
-        exit;
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Retrieve submitted values
-    |--------------------------------------------------------------------------
-    */
-    $leave_id = filter_input(
-        INPUT_POST,
-        'leave_id',
+    $employee_id = filter_var(
+        $_POST['employee_id'] ?? '',
         FILTER_VALIDATE_INT
     );
 
-    $start_date = trim($_POST['start_date'] ?? '');
-    $end_date = trim($_POST['end_date'] ?? '');
-    $status = trim($_POST['status'] ?? '');
-    $approved_by_name = trim($_POST['approved_by'] ?? '');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Validate leave ID
-    |--------------------------------------------------------------------------
-    */
-    if ($leave_id === false || $leave_id === null || $leave_id <= 0) {
-        throw new InvalidArgumentException(
-            'Invalid leave request ID.'
-        );
+    if (!$employee_id || $employee_id <= 0) {
+        throw new Exception("Invalid employee ID.");
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Validate approver name length without mbstring
-    |--------------------------------------------------------------------------
-    */
-    $approverLength = preg_match_all(
-        '/./us',
-        $approved_by_name
-    );
-
-    if ($approverLength === false) {
-        throw new InvalidArgumentException(
-            'The approver name contains invalid text encoding.'
-        );
-    }
-
-    if ($approverLength > 150) {
-        throw new InvalidArgumentException(
-            'The Approved By name must not exceed 150 characters.'
-        );
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Validate dates
-    |--------------------------------------------------------------------------
-    */
-    $start = DateTime::createFromFormat(
-        '!Y-m-d',
-        $start_date
-    );
-
-    $end = DateTime::createFromFormat(
-        '!Y-m-d',
-        $end_date
-    );
-
-    if (
-        !$start ||
-        !$end ||
-        $start->format('Y-m-d') !== $start_date ||
-        $end->format('Y-m-d') !== $end_date
-    ) {
-        throw new InvalidArgumentException(
-            'Invalid date format. Please select valid dates.'
-        );
-    }
-
-    if ($end < $start) {
-        throw new InvalidArgumentException(
-            'End date cannot be earlier than the start date.'
-        );
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Validate leave status
-    |--------------------------------------------------------------------------
-    */
-    $allowed_statuses = [
-        'Pending',
-        'Approved',
-        'Denied'
-    ];
-
-    if (!in_array($status, $allowed_statuses, true)) {
-        throw new InvalidArgumentException(
-            'Invalid leave status.'
-        );
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Validate approval information
-    |--------------------------------------------------------------------------
-    */
-    if ($status === 'Approved' && $approved_by_name === '') {
-        throw new InvalidArgumentException(
-            'Please enter the name of the person who approved the leave.'
-        );
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Calculate leave days, including both start and end dates
-    |--------------------------------------------------------------------------
-    */
-    $total_days = (int) $start->diff($end)->days + 1;
-
-    /*
-    |--------------------------------------------------------------------------
-    | Confirm that the leave request exists
-    |--------------------------------------------------------------------------
-    */
-    $check = $conn->prepare(
-        'SELECT leave_id FROM leaves WHERE leave_id = ? LIMIT 1'
-    );
-
-    $check->bind_param('i', $leave_id);
-    $check->execute();
-    $check->store_result();
-
-    if ($check->num_rows === 0) {
-        $check->close();
-
-        throw new InvalidArgumentException(
-            'The requested leave record was not found.'
-        );
-    }
-
-    $check->close();
-
-    /*
-    |--------------------------------------------------------------------------
-    | Update leave request
-    |--------------------------------------------------------------------------
-    | - Keeps the original approval date when an approved request is edited.
-    | - Sets the approval date when a request is approved for the first time.
-    | - Clears the approval date when status becomes Pending or Denied.
-    |--------------------------------------------------------------------------
-    */
+    // Fetch existing employee information
     $stmt = $conn->prepare("
-        UPDATE leaves
-        SET
-            start_date = ?,
-            end_date = ?,
-            total_days = ?,
-            status = ?,
-            approved_by_name = ?,
-            approval_date = CASE
-                WHEN ? = 'Approved' THEN
-                    COALESCE(approval_date, CURRENT_TIMESTAMP)
-                ELSE NULL
-            END
-        WHERE leave_id = ?
+        SELECT *
+        FROM employees
+        WHERE employee_id = ?
+        LIMIT 1
     ");
 
-    $stmt->bind_param(
-        'ssisssi',
-        $start_date,
-        $end_date,
-        $total_days,
-        $status,
-        $approved_by_name,
-        $status,
-        $leave_id
-    );
-
+    $stmt->bind_param("i", $employee_id);
     $stmt->execute();
+
+    $employee = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
-    $conn->close();
-
-    /*
-    |--------------------------------------------------------------------------
-    | Redirect after successful update
-    |--------------------------------------------------------------------------
-    */
-    header('Location: leaves_request.php?success=updated');
-    exit;
-
-} catch (InvalidArgumentException $e) {
-    if (isset($conn) && $conn instanceof mysqli) {
-        $conn->close();
+    if (!$employee) {
+        throw new Exception("Employee not found.");
     }
 
-    http_response_code(400);
+    // Submitted fields
+    $fields = [
+        'first_name',
+        'last_name',
+        'national_id',
+        'kra_pin',
+        'nssf_number',
+        'nhif_number',
+        'email',
+        'phone',
+        'department',
+        'position',
+        'date_of_hire',
+        'status',
+        'employment_type',
+        'contract_start',
+        'contract_end'
+    ];
 
-    echo '<!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Leave Update</title>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                background: #f4f6f9;
-                padding: 40px 20px;
-            }
-            .message {
-                max-width: 600px;
-                margin: 40px auto;
-                background: #fff;
-                padding: 25px;
-                border-radius: 8px;
-                border-left: 5px solid #dc2626;
-                box-shadow: 0 3px 12px rgba(0,0,0,.08);
-            }
-            a {
-                color: #2563eb;
-                text-decoration: none;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="message">
-            <h2>Unable to Update Leave</h2>
-            <p>' . htmlspecialchars(
-                $e->getMessage(),
-                ENT_QUOTES,
-                'UTF-8'
-            ) . '</p>
-            <a href="leaves_request.php">Return to Leave Requests</a>
-        </div>
-    </body>
-    </html>';
+    $updates = [];
 
-    exit;
+    foreach ($fields as $field) {
+        $newValue = trim($_POST[$field] ?? '');
 
-} catch (Throwable $e) {
-    // Record the detailed error in the server's PHP error log.
-    error_log(
-        'update_leave.php error: ' .
-        $e->getMessage() .
-        ' in ' . $e->getFile() .
-        ' on line ' . $e->getLine()
-    );
+        // Convert empty contract dates to NULL
+        if (in_array($field, ['contract_start', 'contract_end'], true)) {
+            $newValue = ($newValue === '') ? null : $newValue;
+        }
 
-    if (isset($conn) && $conn instanceof mysqli) {
-        try {
-            $conn->close();
-        } catch (Throwable $closeError) {
-            error_log(
-                'Database close error: ' . $closeError->getMessage()
-            );
+        $oldValue = $employee[$field] ?? null;
+
+        if ($newValue !== $oldValue) {
+            $updates[$field] = $newValue;
         }
     }
 
-    http_response_code(500);
+    // Validate required fields
+    $firstName = $updates['first_name'] ?? $employee['first_name'];
+    $lastName = $updates['last_name'] ?? $employee['last_name'];
+    $hireDate = $updates['date_of_hire'] ?? $employee['date_of_hire'];
 
-    echo '<!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Leave Update Error</title>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                background: #f4f6f9;
-                padding: 40px 20px;
-            }
-            .message {
-                max-width: 600px;
-                margin: 40px auto;
-                background: #fff;
-                padding: 25px;
-                border-radius: 8px;
-                border-left: 5px solid #dc2626;
-                box-shadow: 0 3px 12px rgba(0,0,0,.08);
-            }
-            a {
-                color: #2563eb;
-                text-decoration: none;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="message">
-            <h2>Something Went Wrong</h2>
-            <p>The leave request could not be updated. Please try again.</p>
-            <p>If the problem continues, contact the system administrator.</p>
-            <a href="leaves_request.php">Return to Leave Requests</a>
-        </div>
-    </body>
-    </html>';
+    if ($firstName === '' || $lastName === '' || $hireDate === '') {
+        throw new Exception("First name, last name and date of hire are required.");
+    }
 
-    exit;
+    // Validate email if changed
+    $emailChanged = array_key_exists('email', $updates);
+
+    if ($emailChanged && $updates['email'] !== null && $updates['email'] !== '') {
+        if (!filter_var($updates['email'], FILTER_VALIDATE_EMAIL)) {
+            throw new Exception("Please enter a valid email address.");
+        }
+    }
+
+    // Automatically deactivate expired contracts
+    $employmentType = $updates['employment_type'] ?? $employee['employment_type'];
+    $contractEnd = $updates['contract_end'] ?? $employee['contract_end'];
+
+    if ($employmentType === 'Contract' && !empty($contractEnd) && date('Y-m-d') > $contractEnd) {
+        $updates['status'] = 'Inactive';
+    }
+
+    // Nothing changed
+    if (empty($updates)) {
+        echo "success";
+        exit;
+    }
+
+    $conn->begin_transaction();
+
+    // Update only changed employee columns
+    if (!empty($updates)) {
+        $setParts = [];
+        $values = [];
+        $types = '';
+
+        foreach ($updates as $column => $value) {
+            $setParts[] = "`$column` = ?";
+            $values[] = $value;
+            $types .= 's';
+        }
+
+        $sql = "
+            UPDATE employees
+            SET " . implode(', ', $setParts) . "
+            WHERE employee_id = ?
+        ";
+
+        $types .= 'i';
+        $values[] = $employee_id;
+
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param($types, ...$values);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    // Update users only when email has actually changed
+    if ($emailChanged) {
+        $newEmail = $updates['email'];
+
+        // Check for duplicate email in another user account
+        if ($newEmail !== null && $newEmail !== '') {
+            $check = $conn->prepare("
+                SELECT user_id
+                FROM users
+                WHERE email = ?
+                  AND employee_id <> ?
+                LIMIT 1
+            ");
+
+            $check->bind_param("si", $newEmail, $employee_id);
+            $check->execute();
+
+            if ($check->get_result()->num_rows > 0) {
+                $check->close();
+                throw new Exception("This email is already assigned to another user account.");
+            }
+
+            $check->close();
+        }
+
+        $userStmt = $conn->prepare("
+            UPDATE users
+            SET email = ?
+            WHERE employee_id = ?
+        ");
+
+        $userStmt->bind_param("si", $newEmail, $employee_id);
+        $userStmt->execute();
+        $userStmt->close();
+    }
+
+    $conn->commit();
+
+    echo "success";
+
+} catch (Throwable $e) {
+
+    try {
+        $conn->rollback();
+    } catch (Throwable $ignored) {}
+
+    error_log("Employee update failed: " . $e->getMessage());
+
+    http_response_code(400);
+    echo "error: " . $e->getMessage();
+
+} finally {
+    $conn->close();
 }
 ?>

@@ -5,6 +5,11 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once 'db_con.php';
+// Load PhpSpreadsheet from the project root vendor directory.
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\RichText\RichText;
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 $conn->set_charset("utf8mb4");
@@ -231,6 +236,265 @@ function productionExcelCell(string $value): string
         'UTF-8'
     );
 }
+/*
+|--------------------------------------------------------------------------
+| Excel import helpers
+|--------------------------------------------------------------------------
+*/
+
+function productionImportRedirect(
+    string $message,
+    string $type,
+    int $reportId = 0
+): void {
+    $key = $type === 'error'
+        ? 'production_report_error'
+        : 'production_report_success';
+
+    $_SESSION[$key] = $message;
+
+    $url = 'production_daily_report.php';
+
+    if ($reportId > 0) {
+        $url .= '?mode=edit&report_id=' . $reportId;
+    }
+
+    header("Location: " . $url);
+    exit;
+}
+
+function productionNormalizeHeading(string $heading): string
+{
+    $heading = strtolower(trim($heading));
+
+    $heading = preg_replace('/[^a-z0-9]+/', ' ', $heading);
+
+    return trim(preg_replace('/\s+/', ' ', $heading));
+}
+
+function productionExcelText($cell): string
+{
+    // Do not execute spreadsheet formulas during import.
+    if ($cell->isFormula()) {
+        throw new Exception(
+            "Formula cells are not supported in the activity columns."
+        );
+    }
+
+    $value = $cell->getValue();
+
+    if ($value instanceof RichText) {
+        $value = $value->getPlainText();
+    }
+
+    return trim((string) ($value ?? ''));
+}
+
+
+function productionReadExcelActivities(
+    string $filePath,
+    array $activityTypes,
+    array $statuses
+): array {
+
+    $reader = IOFactory::createReaderForFile($filePath);
+    $reader->setReadDataOnly(true);
+
+    $spreadsheet = $reader->load($filePath);
+
+    try {
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $highestRow = $sheet->getHighestDataRow();
+        $highestColumn = $sheet->getHighestDataColumn();
+
+        $highestColumnIndex =
+            \PhpOffice\PhpSpreadsheet\Cell\Coordinate::
+            columnIndexFromString($highestColumn);
+
+        $requiredHeadings = [
+            'description',
+            'indicators of performance',
+            'outcome',
+            'routine planned',
+            'status'
+        ];
+
+        $headerRow = 0;
+        $columnMap = [];
+
+        /*
+         * Find the header row within the first 15 rows.
+         */
+        for ($row = 1; $row <= min(15, $highestRow); $row++) {
+
+            $foundHeadings = [];
+
+            for ($col = 1; $col <= $highestColumnIndex; $col++) {
+
+                $cellCoordinate =
+                    \PhpOffice\PhpSpreadsheet\Cell\Coordinate::
+                    stringFromColumnIndex($col) . $row;
+
+                $cell = $sheet->getCell($cellCoordinate);
+
+                $heading = productionNormalizeHeading(
+                    (string) $cell->getValue()
+                );
+
+                if ($heading !== '') {
+                    $foundHeadings[$heading] = $col;
+                }
+            }
+
+            $allFound = true;
+
+            foreach ($requiredHeadings as $required) {
+                if (!isset($foundHeadings[$required])) {
+                    $allFound = false;
+                    break;
+                }
+            }
+
+            if ($allFound) {
+                $headerRow = $row;
+
+                foreach ($requiredHeadings as $required) {
+                    $columnMap[$required] = $foundHeadings[$required];
+                }
+
+                break;
+            }
+        }
+
+        if ($headerRow === 0) {
+            throw new Exception(
+                "The required Excel headings could not be found. "
+                . "Please check that your spreadsheet contains: "
+                . "DESCRIPTION, INDICATORS OF PERFORMANCE, OUTCOME, "
+                . "ROUTINE/PLANNED and STATUS."
+            );
+        }
+
+        $activities = [];
+
+        /*
+         * Read spreadsheet rows below the headings.
+         */
+        for ($row = $headerRow + 1; $row <= $highestRow; $row++) {
+
+            $description = productionExcelText(
+                $sheet->getCell(
+                    \PhpOffice\PhpSpreadsheet\Cell\Coordinate::
+                    stringFromColumnIndex($columnMap['description']) . $row
+                )
+            );
+
+            $indicator = productionExcelText(
+                $sheet->getCell(
+                    \PhpOffice\PhpSpreadsheet\Cell\Coordinate::
+                    stringFromColumnIndex(
+                        $columnMap['indicators of performance']
+                    ) . $row
+                )
+            );
+
+            $outcome = productionExcelText(
+                $sheet->getCell(
+                    \PhpOffice\PhpSpreadsheet\Cell\Coordinate::
+                    stringFromColumnIndex($columnMap['outcome']) . $row
+                )
+            );
+
+            $type = productionExcelText(
+                $sheet->getCell(
+                    \PhpOffice\PhpSpreadsheet\Cell\Coordinate::
+                    stringFromColumnIndex($columnMap['routine planned']) . $row
+                )
+            );
+
+            $status = productionExcelText(
+                $sheet->getCell(
+                    \PhpOffice\PhpSpreadsheet\Cell\Coordinate::
+                    stringFromColumnIndex($columnMap['status']) . $row
+                )
+            );
+
+            // Ignore completely empty rows.
+            if (
+                $description === '' &&
+                $indicator === '' &&
+                $outcome === '' &&
+                $type === '' &&
+                $status === ''
+            ) {
+                continue;
+            }
+
+            if ($description === '') {
+                throw new Exception(
+                    "Excel row {$row} has no DESCRIPTION. "
+                    . "Please correct the spreadsheet and import again."
+                );
+            }
+
+            // Validate Routine / Planned.
+            if ($type === '') {
+                $type = 'Routine';
+            } else {
+                $matchedType = null;
+
+                foreach ($activityTypes as $allowedType) {
+                    if (strcasecmp($type, $allowedType) === 0) {
+                        $matchedType = $allowedType;
+                        break;
+                    }
+                }
+
+                if ($matchedType === null) {
+                    throw new Exception(
+                        "Invalid ROUTINE/PLANNED value on Excel row {$row}. "
+                        . "Use Routine or Planned."
+                    );
+                }
+
+                $type = $matchedType;
+            }
+
+            // Validate status.
+            // Allow any status text from Excel.
+if ($status === '') {
+    $status = 'Pending';
+}
+
+            $activities[] = [
+                'description' => $description,
+                'performance_indicators' => $indicator,
+                'outcome' => $outcome,
+                'activity_type' => $type,
+                'status' => $status
+            ];
+
+            if (count($activities) > 100) {
+                throw new Exception(
+                    "The spreadsheet contains more than 100 activities. "
+                    . "Please import a maximum of 100 activities."
+                );
+            }
+        }
+
+        if (!$activities) {
+            throw new Exception(
+                "No activity rows were found in the Excel spreadsheet."
+            );
+        }
+
+        return $activities;
+
+    } finally {
+        $spreadsheet->disconnectWorksheets();
+    }
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -264,7 +528,146 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 | Excel export
 |--------------------------------------------------------------------------
 */
+/*
+|--------------------------------------------------------------------------
+| Excel import
+|--------------------------------------------------------------------------
+*/
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'import') {
+
+    $submittedToken = $_POST['csrf_token'] ?? '';
+
+    if (
+        !is_string($submittedToken) ||
+        !hash_equals($csrfToken, $submittedToken)
+    ) {
+        productionImportRedirect(
+            "Your session token is invalid. Refresh the page and try again.",
+            'error'
+        );
+    }
+
+    $reportId = filter_var(
+        $_POST['report_id'] ?? '',
+        FILTER_VALIDATE_INT
+    );
+
+    $reportId = $reportId ? (int) $reportId : 0;
+
+    // If importing into an existing report, verify ownership.
+    if ($reportId > 0) {
+
+        $existingReport = productionGetOwnedReport(
+            $conn,
+            $reportId,
+            $employeeId
+        );
+
+        if (!$existingReport) {
+            productionImportRedirect(
+                "Report not found or you do not have permission to edit it.",
+                'error'
+            );
+        }
+    }
+
+    if (!isset($_FILES['excel_file'])) {
+        productionImportRedirect(
+            "Please select an Excel file.",
+            'error',
+            $reportId
+        );
+    }
+
+    $file = $_FILES['excel_file'];
+
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+
+        $uploadErrors = [
+            UPLOAD_ERR_INI_SIZE =>
+                "The uploaded file exceeds the server upload limit.",
+
+            UPLOAD_ERR_FORM_SIZE =>
+                "The uploaded file is too large.",
+
+            UPLOAD_ERR_PARTIAL =>
+                "The file was only partially uploaded.",
+
+            UPLOAD_ERR_NO_FILE =>
+                "Please select an Excel file."
+        ];
+
+        $message = $uploadErrors[$file['error']]
+            ?? "Unable to upload the Excel file.";
+
+        productionImportRedirect(
+            $message,
+            'error',
+            $reportId
+        );
+    }
+
+    // Maximum upload size: 5 MB.
+    if ($file['size'] > 5 * 1024 * 1024) {
+        productionImportRedirect(
+            "The Excel file must not exceed 5 MB.",
+            'error',
+            $reportId
+        );
+    }
+
+    $extension = strtolower(
+        pathinfo($file['name'], PATHINFO_EXTENSION)
+    );
+
+    if (!in_array($extension, ['xlsx', 'xls'], true)) {
+        productionImportRedirect(
+            "Only Excel .xlsx and .xls files are supported.",
+            'error',
+            $reportId
+        );
+    }
+
+    try {
+
+        $importedActivities = productionReadExcelActivities(
+            $file['tmp_name'],
+            $activityTypes,
+            $statuses
+        );
+
+        /*
+         * Keep imported activities temporarily in the session.
+         * The database is not modified here.
+         */
+        $_SESSION['production_report_import'] = [
+            'user_id' => $userId,
+            'report_id' => $reportId,
+            'activities' => $importedActivities
+        ];
+
+        productionImportRedirect(
+            count($importedActivities)
+                . " activities imported successfully. "
+                . "Review the activities below and click Save Daily Report.",
+            'success',
+            $reportId
+        );
+
+    } catch (Throwable $e) {
+
+        error_log(
+            "Production Excel import: " . $e->getMessage()
+        );
+
+        productionImportRedirect(
+            $e->getMessage(),
+            'error',
+            $reportId
+        );
+    }
+}
 if ($action === 'export') {
     $reportId = filter_var(
         $_GET['report_id'] ?? '',
@@ -480,15 +883,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
             );
         }
 
-        if (
-            !in_array($type, $activityTypes, true) ||
-            !in_array($activityStatus, $statuses, true)
-        ) {
-            productionRedirect(
-                "An activity has an invalid type or status.",
-                'error'
-            );
-        }
+        if (!in_array($type, $activityTypes, true)) {
+    productionRedirect(
+        "An activity has an invalid Routine / Planned type.",
+        'error'
+    );
+}
+
+if ($activityStatus === '') {
+    $activityStatus = 'Pending';
+}
 
         $activities[] = [
             'description' => $description,
@@ -658,7 +1062,30 @@ if ($requestedReportId && $requestedReportId > 0) {
         $mode = 'edit';
     }
 }
+/*
+|--------------------------------------------------------------------------
+| Restore imported Excel activities
+|--------------------------------------------------------------------------
+*/
 
+if (isset($_SESSION['production_report_import'])) {
+
+    $importData = $_SESSION['production_report_import'];
+
+    $currentReportId = (int) ($selectedReport['report_id'] ?? 0);
+
+    if (
+        (int) $importData['user_id'] === $userId &&
+        (int) $importData['report_id'] === $currentReportId
+    ) {
+
+        // Imported activities replace the displayed form rows only.
+        // Existing database activities remain unchanged until Save.
+        $selectedActivities = $importData['activities'];
+
+        unset($_SESSION['production_report_import']);
+    }
+}
 if (isset($_SESSION['production_report_success'])) {
     $success = $_SESSION['production_report_success'];
     unset($_SESSION['production_report_success']);
@@ -817,6 +1244,65 @@ function productionH($value): string
     <!-- Report form -->
     <?php if ($mode !== 'view'): ?>
         <div class="production-card p-5 mb-8">
+            <!-- Excel import panel -->
+<div class="border border-blue-200 bg-blue-50 rounded-lg p-4 mb-6">
+
+    <h3 class="font-bold text-blue-900 mb-2">
+        Import Activities from Excel
+    </h3>
+
+    <p class="text-sm text-blue-800 mb-3">
+        Upload an Excel spreadsheet to automatically populate the
+        activity form. You can review and edit the imported activities
+        before saving your report.
+    </p>
+
+    <form method="POST"
+          action="production_daily_report.php"
+          enctype="multipart/form-data"
+          class="flex flex-col sm:flex-row gap-3 sm:items-end">
+
+        <input type="hidden" name="action" value="import">
+
+        <input type="hidden"
+               name="csrf_token"
+               value="<?= productionH($csrfToken) ?>">
+
+        <input type="hidden"
+               name="report_id"
+               value="<?= (int) ($selectedReport['report_id'] ?? 0) ?>">
+
+        <div class="flex-1">
+
+            <label class="production-label">
+                Select Excel File (.xlsx or .xls)
+            </label>
+
+            <input type="file"
+                   name="excel_file"
+                   accept=".xlsx,.xls"
+                   class="production-input bg-white"
+                   required>
+
+        </div>
+
+        <button type="submit"
+                class="bg-blue-700 hover:bg-blue-800 text-white
+                       px-5 py-2.5 rounded-lg font-semibold">
+
+            <i class="fas fa-file-excel mr-1"></i>
+            Import Excel
+
+        </button>
+
+    </form>
+
+    <p class="text-xs text-blue-700 mt-2">
+        Maximum file size: 5 MB. Maximum activities: 100.
+        Importing does not save the report automatically.
+    </p>
+
+</div>
             <div class="flex items-center justify-between flex-wrap gap-3 mb-5">
                 <h2 class="text-lg font-bold">
                     <?= $mode === 'edit'
@@ -974,18 +1460,27 @@ function productionH($value): string
                                             Status *
                                         </label>
 
-                                        <select name="activity_status[]"
-                                                class="production-input"
-                                                required>
-                                            <?php foreach ($statuses as $status): ?>
-                                                <option
-                                                    value="<?= productionH($status) ?>"
-                                                    <?= $activity['status'] === $status
-                                                        ? 'selected' : '' ?>>
-                                                    <?= productionH($status) ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
+                                       <select name="activity_status[]"
+        class="production-input"
+        required>
+
+    <?php
+    $currentStatus = trim($activity['status'] ?? 'Pending');
+
+    $displayStatuses = array_unique(
+        array_merge($statuses, [$currentStatus])
+    );
+    ?>
+
+    <?php foreach ($displayStatuses as $status): ?>
+        <option
+            value="<?= productionH($status) ?>"
+            <?= $currentStatus === $status ? 'selected' : '' ?>>
+            <?= productionH($status) ?>
+        </option>
+    <?php endforeach; ?>
+
+</select>
                                     </div>
                                 </div>
                             </div>
@@ -1305,16 +1800,15 @@ function productionH($value): string
                     </div>
 
                     <div>
-                        <label class="production-label">Status *</label>
-                        <select name="activity_status[]"
-                            class="production-input" required>
-                            <option value="Pending">Pending</option>
-                            <option value="In Progress">In Progress</option>
-                            <option value="Completed">Completed</option>
-                            <option value="On Hold">On Hold</option>
-                            <option value="Cancelled">Cancelled</option>
-                        </select>
-                    </div>
+    <label class="production-label">Status *</label>
+    <input type="text"
+           name="activity_status[]"
+           class="production-input"
+           value="Pending"
+           list="productionStatusSuggestions"
+           required
+           placeholder="Enter activity status...">
+</div>
                 </div>
             </div>
         `;

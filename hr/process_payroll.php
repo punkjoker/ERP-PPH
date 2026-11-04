@@ -1,734 +1,133 @@
 <?php
 require 'db_con.php';
-
-$user_id = intval($_GET['id']);
-if (!$user_id) die("Invalid Employee ID");
-
-
-
-// Fetch employee basic info
-$user = $conn->query("SELECT full_name, email, national_id FROM users WHERE user_id = $user_id")->fetch_assoc();
-
-// Fetch salary info
-$salary = $conn->query("SELECT * FROM employee_salary WHERE user_id = $user_id")->fetch_assoc();
-
-// Fetch allowances
-$allowances = $conn->query("SELECT allowance_name, amount FROM employee_allowances WHERE user_id = $user_id");
-
-// Fetch deductions (with rates)
-$deductions = $conn->query("
-    SELECT d.deduction_name, d.rate
-    FROM employee_deductions ed
-    JOIN deductions d ON ed.deduction_id = d.deduction_id
-    WHERE ed.user_id = $user_id
-");
-
-$base_salary = $salary['base_salary'] ?? 0;
-$total_allowances = 0;
-$total_deduction_rate = 0;
-
-if ($allowances->num_rows > 0) {
-    while ($a = $allowances->fetch_assoc()) {
-        $total_allowances += $a['amount'];
-    }
-    $allowances->data_seek(0);
-}
-if ($deductions->num_rows > 0) {
-    while ($d = $deductions->fetch_assoc()) {
-        $total_deduction_rate += $d['rate'];
-    }
-    $deductions->data_seek(0);
-}
-
-$gross_pay = $base_salary + $total_allowances;
-$estimated_deductions = ($gross_pay * $total_deduction_rate) / 100;
-$net_pay = $gross_pay - $estimated_deductions;
-?>
-
-<?php
-// Read the selected payroll month from the URL.
-// Example: process_payroll.php?id=15&month=2026-10
-
+require_once 'kenya_payroll_calculator.php';
+require_once 'pension_config.php';
+function h($v) { return htmlspecialchars((string)($v ?? ''), ENT_QUOTES, 'UTF-8'); }
+$user_id = filter_var($_GET['id'] ?? null, FILTER_VALIDATE_INT);
+if (!$user_id) { http_response_code(400); exit('Invalid employee ID'); }
 $selectedMonth = $_GET['month'] ?? date('Y-m');
-
-if (!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $selectedMonth)) {
-    $selectedMonth = date('Y-m');
-}
-
-$monthDate = DateTime::createFromFormat('!Y-m', $selectedMonth);
-$payrollMonth = $monthDate->format('F');
-$payrollYear = (int) $monthDate->format('Y');
-
-// Fetch the saved workflow information for this employee and month.
-
-// Fetch existing payroll for the selected employee and month
-$stmt = $conn->prepare("
-    SELECT *
-    FROM payroll_records
-    WHERE user_id = ?
-      AND month = ?
-      AND year = ?
-    LIMIT 1
-");
-
-$stmt->bind_param(
-    "isi",
-    $user_id,
-    $payrollMonth,
-    $payrollYear
-);
-
-$stmt->execute();
-
-$result = $stmt->get_result();
-$existingPayroll = $result->fetch_assoc();
-
-$stmt->close();
-
-// Determine whether this is a new or existing payroll
-$isExistingPayroll = !empty($existingPayroll);
-
-// Existing payroll values
-$payrollRecord = $existingPayroll ?: [
-    'payroll_no' => '',
-    'prepared_by' => '',
-    'date_prepared' => '',
-    'preparation_status' => 'Pending',
-    'approved_by' => '',
-    'approval_date' => '',
-    'approval_status' => 'Pending',
-    'accountant_name' => '',
-    'payment_date' => '',
-    'payment_status' => 'Pending Pay'
-];
-
-// Load saved salary amounts
-if ($isExistingPayroll) {
-    $base_salary = (float) $existingPayroll['base_salary'];
-    $total_allowances = (float) $existingPayroll['total_allowances'];
-    $estimated_deductions = (float) $existingPayroll['total_deductions'];
-
-    $gross_pay = $base_salary + $total_allowances;
-    $net_pay = (float) $existingPayroll['net_pay'];
-}
-
-// Load saved allowance and deduction details
-$savedDetails = [];
-
-if ($isExistingPayroll && !empty($existingPayroll['details'])) {
-    $decoded = json_decode($existingPayroll['details'], true);
-
-    if (is_array($decoded)) {
-        $savedDetails = $decoded;
+if (!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $selectedMonth)) $selectedMonth = date('Y-m');
+$dt = DateTimeImmutable::createFromFormat('!Y-m', $selectedMonth);
+$payrollMonth = $dt->format('F'); $payrollYear = (int)$dt->format('Y');
+$stmt=$conn->prepare('SELECT full_name,email,national_id FROM users WHERE user_id=? LIMIT 1');
+$stmt->bind_param('i',$user_id);$stmt->execute();$user=$stmt->get_result()->fetch_assoc();$stmt->close();
+if (!$user) {http_response_code(404);exit('Employee not found');}
+$stmt=$conn->prepare('SELECT * FROM employee_salary WHERE user_id=? LIMIT 1');
+$stmt->bind_param('i',$user_id);$stmt->execute();$salary=$stmt->get_result()->fetch_assoc();$stmt->close();
+if (!$salary) {http_response_code(400);exit('Please configure employee salary first.');}
+$stmt=$conn->prepare('SELECT * FROM payroll_records WHERE user_id=? AND month=? AND year=? LIMIT 1');
+$stmt->bind_param('isi',$user_id,$payrollMonth,$payrollYear);$stmt->execute();$existing=$stmt->get_result()->fetch_assoc();$stmt->close();
+$isExisting=(bool)$existing;
+$pensionConfig=loadPensionConfig($conn,$user_id);
+$workflow=$existing ?: ['payroll_no'=>'','prepared_by'=>'','date_prepared'=>'','preparation_status'=>'Pending','approved_by'=>'','approval_date'=>'','approval_status'=>'Pending','accountant_name'=>'','payment_date'=>'','payment_status'=>'Pending Pay'];
+$saved=json_decode((string)($existing['details'] ?? '{}'),true); if(!is_array($saved))$saved=[];
+if($isExisting && isset($saved['pension'])) { $pensionConfig=['enabled'=>(bool)($saved['pension']['enabled']??false),'tax_qualified'=>(bool)($saved['pension']['tax_qualified']??false)]; }
+$allowances=[];$custom=[];
+if ($isExisting) {
+    foreach (($saved['allowances'] ?? []) as $a) if(is_array($a)) $allowances[]=['name'=>(string)($a['name']??''),'amount'=>(float)($a['amount']??0)];
+    foreach (($saved['deductions'] ?? []) as $d) if(is_array($d)) {
+        $name=(string)($d['name']??'');
+        if (preg_match('/^(PAYE|NSSF|SHIF|SHA|AHL|HOUSING LEVY|AFFORDABLE HOUSING LEVY|PENSION|EMPLOYEE PENSION)$/i',$name)) continue;
+        if (in_array(($d['type']??''),['statutory','pension'],true)) continue;
+        $custom[]=['name'=>$name,'type'=>(string)($d['basis']??'fixed'),'value'=>(float)($d['value']??$d['amount']??0)];
     }
+} else {
+    $stmt=$conn->prepare('SELECT allowance_name,amount FROM employee_allowances WHERE user_id=?');
+    $stmt->bind_param('i',$user_id);$stmt->execute();$r=$stmt->get_result();
+    while($a=$r->fetch_assoc()) $allowances[]=['name'=>$a['allowance_name'],'amount'=>(float)$a['amount']]; $stmt->close();
+    $stmt=$conn->prepare('SELECT d.deduction_name,d.rate,d.amount FROM employee_deductions ed JOIN deductions d ON d.deduction_id=ed.deduction_id WHERE ed.user_id=?');
+    $stmt->bind_param('i',$user_id);$stmt->execute();$r=$stmt->get_result();
+    while($d=$r->fetch_assoc()) {
+        if(preg_match('/^(PAYE|NSSF|SHIF|SHA|AHL|HOUSING LEVY|AFFORDABLE HOUSING LEVY|PENSION|EMPLOYEE PENSION)$/i',trim($d['deduction_name'])))continue;
+        $rate=(float)($d['rate']??0);
+        $amount=(float)($d['amount']??0);
+        if($rate>0){$custom[]=['name'=>$d['deduction_name'],'type'=>'percent','value'=>$rate];}
+        elseif($amount>0){$custom[]=['name'=>$d['deduction_name'],'type'=>'fixed','value'=>$amount];}
+    } $stmt->close();
 }
-
+$locked=$isExisting && (($existing['approval_status']??'')==='Approved'||($existing['payment_status']??'')==='Paid');
+$legacy=$isExisting && (($saved['calculation']['rule_set']??'')!=='KE_STANDARD_2026_02_PENSION');
+$calculation=null;$calcError='';
+if (!$isExisting || !$legacy) {
+    try {$calculation=kenyaStandardPayroll((float)($isExisting?$existing['base_salary']:$salary['base_salary']),$allowances,$custom,$payrollMonth,$payrollYear,$pensionConfig);} catch(Throwable $e){$calcError=$e->getMessage();}
+}
+$displayBasic=(float)($isExisting?$existing['base_salary']:$salary['base_salary']);
+$displayAllow=(float)($isExisting?$existing['total_allowances']:($calculation['total_allowances']??0));
+$displayDed=(float)($isExisting?$existing['total_deductions']:($calculation['total_deductions']??0));
+$displayNet=(float)($isExisting?$existing['net_pay']:($calculation['net_pay']??0));
+$displayGross=$displayBasic+$displayAllow;
 ?>
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Process Payroll</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-</head>
-<body class="bg-gray-100">
-<?php include 'navbar.php'; ?>
-
-<div class="ml-64 p-6 max-w-6xl mx-auto">
-    <h1 class="text-2xl font-bold text-gray-700 mb-6">Process Payroll - <?= htmlspecialchars($user['full_name']) ?></h1>
-
-    <!-- Employee Info -->
-   
-<!-- Employee Info -->
-<div class="bg-white shadow rounded-lg p-5 mb-6">
-
-    <h2 class="text-lg font-semibold text-gray-700 mb-3">
-        Employee Information
-    </h2>
-
-    <div class="space-y-2">
-
-        <p>
-            <strong>Email:</strong>
-            <?= htmlspecialchars($user['email'] ?? '-') ?>
-        </p>
-
-        <p>
-            <strong>National ID:</strong>
-            <?= htmlspecialchars($user['national_id'] ?? '-') ?>
-        </p>
-
-        <p>
-            <strong>Bank Name:</strong>
-            <?= htmlspecialchars($salary['bank_name'] ?? '-') ?>
-        </p>
-
-        <p>
-            <strong>Bank Account:</strong>
-            <?= htmlspecialchars($salary['bank_account'] ?? '-') ?>
-        </p>
-
-    </div>
-
-</div>
-
-
-    <!-- Base Salary -->
-    <div class="bg-white shadow rounded-lg p-5 mb-6">
-        <h2 class="text-lg font-semibold text-gray-700 mb-3">Base Salary</h2>
-        
-<!-- Base Salary -->
-<div class="bg-white shadow rounded-lg p-5 mb-6">
-
-
-    <p class="mb-4">
-        <strong>Base Salary:</strong>
-        Ksh <?= number_format($base_salary, 2) ?>
-    </p>
-
-    <div>
-        <label class="block text-gray-700 font-medium mb-2">
-            Payroll No.
-        </label>
-
-        <input
-            type="text"
-            id="payrollNo"
-            maxlength="100"
-            value="<?= htmlspecialchars($payrollRecord['payroll_no'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-            placeholder="Enter Payroll Number"
-            class="border rounded px-3 py-2 w-full md:w-1/2"
-        >
-    </div>
-
-</div>
-
-    </div>
-
-    <!-- Allowances -->
-    <div class="bg-white shadow rounded-lg p-5 mb-6">
-        <h2 class="text-lg font-semibold text-gray-700 mb-3">Allowances</h2>
-        <table class="min-w-full table-auto border mb-3" id="allowanceTable">
-            <thead class="bg-green-500 text-white">
-                <tr>
-                    <th class="px-4 py-2 text-left">Allowance Name</th>
-                    <th class="px-4 py-2 text-left">Amount (Ksh)</th>
-                </tr>
-            </thead>
-            
-<tbody>
-<?php if ($isExistingPayroll): ?>
-
-    <?php foreach (($savedDetails['allowances'] ?? []) as $a): ?>
-        <tr class="border-b">
-            <td class="px-4 py-2">
-                <?= htmlspecialchars($a['name'] ?? '') ?>
-            </td>
-            <td class="px-4 py-2">
-                <?= number_format((float)($a['amount'] ?? 0), 2) ?>
-            </td>
-        </tr>
-    <?php endforeach; ?>
-
-<?php else: ?>
-
-    <?php while ($a = $allowances->fetch_assoc()): ?>
-        <tr class="border-b">
-            <td class="px-4 py-2">
-                <?= htmlspecialchars($a['allowance_name']) ?>
-            </td>
-            <td class="px-4 py-2">
-                <?= number_format((float)$a['amount'], 2) ?>
-            </td>
-        </tr>
-    <?php endwhile; ?>
-
-<?php endif; ?>
-</tbody>
-
-        </table>
-
-        <!-- Manual Add Allowance -->
-        <div class="flex items-center gap-2">
-            <input type="text" id="manualAllowanceName" placeholder="Allowance Name" class="border rounded px-3 py-2 w-1/2">
-            <input type="number" id="manualAllowanceAmount" placeholder="Amount" class="border rounded px-3 py-2 w-1/4">
-            <button id="addAllowanceBtn" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">Add</button>
-        </div>
-    </div>
-
-    <!-- Deductions -->
-    <div class="bg-white shadow rounded-lg p-5 mb-6">
-        <h2 class="text-lg font-semibold text-gray-700 mb-3">Deductions</h2>
-        <table class="min-w-full table-auto border mb-3" id="deductionTable">
-            <thead class="bg-red-500 text-white">
-                <tr>
-                    <th class="px-4 py-2 text-left">Deduction Name</th>
-                    <th class="px-4 py-2 text-left">Rate / Amount</th>
-                </tr>
-            </thead>
-            
-<tbody>
-<?php if ($isExistingPayroll): ?>
-
-    <?php foreach (($savedDetails['deductions'] ?? []) as $d): ?>
-        <tr class="border-b">
-            <td class="px-4 py-2">
-                <?= htmlspecialchars($d['name'] ?? '') ?>
-            </td>
-            <td class="px-4 py-2">
-                <?= htmlspecialchars((string)($d['amount'] ?? 0)) ?>
-            </td>
-        </tr>
-    <?php endforeach; ?>
-
-<?php else: ?>
-
-    <?php while ($d = $deductions->fetch_assoc()): ?>
-        <tr class="border-b">
-            <td class="px-4 py-2">
-                <?= htmlspecialchars($d['deduction_name']) ?>
-            </td>
-            <td class="px-4 py-2">
-                <?= htmlspecialchars($d['rate']) ?>%
-            </td>
-        </tr>
-    <?php endwhile; ?>
-
-<?php endif; ?>
-</tbody>
-
-        </table>
-
-        <!-- Manual Add Deduction -->
-        <div class="flex items-center gap-2">
-            <input type="text" id="manualDeductionName" placeholder="Deduction Name" class="border rounded px-3 py-2 w-1/2">
-            <input type="number" id="manualDeductionAmount" placeholder="Amount" class="border rounded px-3 py-2 w-1/4">
-            <button id="addDeductionBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">Add</button>
-        </div>
-    </div>
-
-   <!-- Summary -->
-<div class="bg-white shadow rounded-lg p-5">
-    <h2 class="text-lg font-semibold text-gray-700 mb-3">Salary Summary</h2>
-
-    <div class="grid grid-cols-2 gap-4 mb-4">
-        
-<div>
-    <label class="block text-gray-600 font-medium mb-1">
-        Month
-    </label>
-
-    <select id="payrollMonth"
-            class="border rounded px-3 py-2 w-full">
-
-        <?php
-        $months = [
-            "January", "February", "March", "April",
-            "May", "June", "July", "August",
-            "September", "October", "November", "December"
-        ];
-
-        foreach ($months as $m):
-        ?>
-            <option value="<?= htmlspecialchars($m, ENT_QUOTES, 'UTF-8') ?>"
-                <?= $payrollMonth === $m ? 'selected' : '' ?>>
-                <?= htmlspecialchars($m, ENT_QUOTES, 'UTF-8') ?>
-            </option>
-        <?php endforeach; ?>
-    </select>
-</div>
-
-<div>
-    <label class="block text-gray-600 font-medium mb-1">
-        Year
-    </label>
-
-    <input type="number"
-           id="payrollYear"
-           class="border rounded px-3 py-2 w-full"
-           value="<?= $payrollYear ?>"
-           readonly>
-</div>
-
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-
-    
-<!-- 1. Payroll Preparation -->
-<div>
-    <label class="block mb-1">Prepared By</label>
-    <input type="text" id="preparedBy"
-           value="<?= htmlspecialchars($payrollRecord['prepared_by'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-           class="border rounded px-3 py-2 w-full"
-           placeholder="Enter preparer's name">
-</div>
-
-<div>
-    <label class="block mb-1">Date Prepared</label>
-    <input type="date" id="datePrepared"
-           value="<?= htmlspecialchars($payrollRecord['date_prepared'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-           class="border rounded px-3 py-2 w-full">
-</div>
-
-<div>
-    <label class="block mb-1">Preparation Status</label>
-    <select id="preparationStatus"
-            class="border rounded px-3 py-2 w-full">
-        <option value="Pending"
-            <?= ($payrollRecord['preparation_status'] ?? 'Pending') === 'Pending' ? 'selected' : '' ?>>
-            Pending
-        </option>
-        <option value="Prepared"
-            <?= ($payrollRecord['preparation_status'] ?? '') === 'Prepared' ? 'selected' : '' ?>>
-            Prepared
-        </option>
-    </select>
-</div>
-
-<!-- 2. Payroll Approval -->
-<div>
-    <label class="block mb-1">Approved By</label>
-    <input type="text" id="approvedBy"
-           value="<?= htmlspecialchars($payrollRecord['approved_by'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-           class="border rounded px-3 py-2 w-full"
-           placeholder="Enter approver's name">
-</div>
-
-<div>
-    <label class="block mb-1">Approval Date</label>
-    <input type="date" id="approvalDate"
-           value="<?= htmlspecialchars($payrollRecord['approval_date'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-           class="border rounded px-3 py-2 w-full">
-</div>
-
-<div>
-    <label class="block mb-1">Approval Status</label>
-    <select id="approvalStatus"
-            class="border rounded px-3 py-2 w-full">
-        <option value="Pending"
-            <?= ($payrollRecord['approval_status'] ?? 'Pending') === 'Pending' ? 'selected' : '' ?>>
-            Pending
-        </option>
-        <option value="Approved"
-            <?= ($payrollRecord['approval_status'] ?? '') === 'Approved' ? 'selected' : '' ?>>
-            Approved
-        </option>
-    </select>
-</div>
-
-<!-- 3. Payroll Payment -->
-<div>
-    <label class="block mb-1">Accountant Name</label>
-    <input type="text" id="accountantName"
-           value="<?= htmlspecialchars($payrollRecord['accountant_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-           class="border rounded px-3 py-2 w-full"
-           placeholder="Enter accountant's name">
-</div>
-
-<div>
-    <label class="block mb-1">Payment Date</label>
-    <input type="date" id="paymentDate"
-           value="<?= htmlspecialchars($payrollRecord['payment_date'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-           class="border rounded px-3 py-2 w-full">
-</div>
-
-<div>
-    <label class="block mb-1">Payment Status</label>
-    <select id="paymentStatus"
-            class="border rounded px-3 py-2 w-full">
-        <option value="Pending Pay"
-            <?= ($payrollRecord['payment_status'] ?? 'Pending Pay') === 'Pending Pay' ? 'selected' : '' ?>>
-            Pending Pay
-        </option>
-        <option value="Paid"
-            <?= ($payrollRecord['payment_status'] ?? '') === 'Paid' ? 'selected' : '' ?>>
-            Paid
-        </option>
-    </select>
-</div>
-
-    <p><strong>Gross Pay:</strong> Ksh <span id="grossPay"><?= number_format($gross_pay, 2) ?></span></p>
-    <p><strong>Estimated Deductions:</strong> Ksh <span id="totalDeductions"><?= number_format($estimated_deductions, 2) ?></span></p>
-    <p class="text-blue-700 font-semibold"><strong>Net Pay:</strong> Ksh <span id="netPay"><?= number_format($net_pay, 2) ?></span></p>
-
-    <button
-    id="savePayrollBtn"
-    class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded"
->
-    <?= $isExistingPayroll ? 'Update Payroll' : 'Save Payroll' ?>
-</button>
-
-    <a href="payroll_list.php"
-   class="mt-4 inline-block bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded text-center">
-    Back to Payroll List
-</a>
-
-</div>
-
-</div>
-
-
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Process Payroll</title><script src="https://cdn.tailwindcss.com"></script></head>
+<body class="bg-gray-100 text-gray-800"><?php include 'navbar.php'; ?>
+<main class="ml-64 p-6 max-w-7xl mx-auto space-y-5">
+<h1 class="text-2xl font-bold text-blue-800">Process Payroll — <?=h($user['full_name'])?></h1>
+<?php if($locked): ?><div class="bg-yellow-100 text-yellow-900 p-3 rounded">Approved or paid payroll: financial amounts are locked. Workflow updates are permitted subject to server-side checks.</div><?php endif; ?>
+<?php if($legacy): ?><div class="bg-orange-100 text-orange-900 p-3 rounded">Legacy payroll: saved financial amounts are preserved. Do not recalculate this record automatically; use a controlled migration for historical records.</div><?php endif; ?>
+<?php if($calcError): ?><div class="bg-red-100 text-red-800 p-3 rounded"><?=h($calcError)?></div><?php endif; ?>
+<section class="bg-white rounded shadow p-5 grid md:grid-cols-2 gap-3"><div><h2 class="font-semibold mb-2">Employee Information</h2><p>Email: <?=h($user['email'])?></p><p>National ID: <?=h($user['national_id'])?></p><p>Bank: <?=h($salary['bank_name']??'-')?></p><p>Account: <?=h($salary['bank_account']??'-')?></p></div><div><h2 class="font-semibold mb-2">Salary Information</h2><p>Basic salary: Ksh <?=number_format($displayBasic,2)?></p><label class="block mt-2">Payroll No.<input id="payrollNo" class="border p-2 rounded w-full" maxlength="100" value="<?=h($workflow['payroll_no']??'')?>"></label><p class="text-sm text-gray-500 mt-2">Payroll month: <?=h($payrollMonth.' '.$payrollYear)?></p></div></section>
+<section class="bg-white rounded shadow p-5"><h2 class="font-semibold text-lg mb-3">Allowances</h2><div class="overflow-x-auto"><table class="w-full text-sm" id="allowanceTable"><thead class="bg-green-100"><tr><th class="p-2 text-left">Allowance</th><th class="p-2 text-right">Amount (Ksh)</th><th class="p-2">Action</th></tr></thead><tbody></tbody></table></div><div class="flex flex-wrap gap-2 mt-3"><input id="allowanceName" placeholder="Allowance name" class="border p-2 rounded"><input id="allowanceAmount" type="number" min="0.01" step="0.01" placeholder="Amount" class="border p-2 rounded"><button id="addAllowance" class="bg-green-600 text-white px-4 py-2 rounded">Add allowance</button></div></section>
+<section class="bg-white rounded shadow p-5"><h2 class="font-semibold text-lg mb-2">Optional Employee Pension</h2>
+<p class="text-sm text-gray-600 mb-3">Employee contribution: 6% of gross pay. Employer contribution: 0%. NSSF continues separately. Enrollment is saved per employee; payroll records retain a monthly snapshot.</p>
+<label class="flex items-center gap-2 mb-2"><input id="pensionEnabled" type="checkbox" <?= $pensionConfig['enabled']?'checked':'' ?>> Enroll employee in pension</label>
+<label class="flex items-center gap-2"><input id="pensionQualified" type="checkbox" <?= $pensionConfig['tax_qualified']?'checked':'' ?>> Confirm scheme qualifies for Kenyan PAYE pension relief</label>
+<p class="text-xs text-orange-700 mt-2">Only tick tax relief after confirming the pension scheme qualifies. NSSF and qualifying pension share the applicable monthly tax-deduction cap.</p>
+</section>
+<section class="bg-white rounded shadow p-5"><h2 class="font-semibold text-lg mb-2">Deductions</h2><p class="text-sm text-gray-600 mb-3">Statutory amounts are calculated automatically. Assigned custom deductions use a positive percentage rate (of gross pay), otherwise their fixed amount.</p><div class="overflow-x-auto"><table class="w-full text-sm" id="deductionTable"><thead class="bg-red-100"><tr><th class="p-2 text-left">Deduction</th><th class="p-2 text-left">Basis</th><th class="p-2 text-right">Amount (Ksh)</th><th class="p-2">Action</th></tr></thead><tbody></tbody></table></div><div class="flex flex-wrap gap-2 mt-3"><input id="deductionName" placeholder="Other deduction name" class="border p-2 rounded"><input id="deductionAmount" type="number" min="0.01" step="0.01" placeholder="Fixed amount" class="border p-2 rounded"><button id="addDeduction" class="bg-red-600 text-white px-4 py-2 rounded">Add deduction</button></div></section>
+<section class="bg-white rounded shadow p-5"><h2 class="font-semibold text-lg mb-3">Payroll Period and Workflow</h2><div class="grid md:grid-cols-2 gap-3"><label>Month<select id="payrollMonth" class="border p-2 rounded w-full"><?php foreach(['January','February','March','April','May','June','July','August','September','October','November','December'] as $m): ?><option value="<?=h($m)?>" <?=$m===$payrollMonth?'selected':''?>><?=h($m)?></option><?php endforeach;?></select></label><label>Year<input id="payrollYear" class="border p-2 rounded w-full" readonly value="<?=$payrollYear?>"></label></div><div class="grid md:grid-cols-3 gap-4 mt-4">
+<?php foreach([['preparedBy','Prepared By','prepared_by','text'],['datePrepared','Date Prepared','date_prepared','date'],['approvedBy','Approved By','approved_by','text'],['approvalDate','Approval Date','approval_date','date'],['accountantName','Accountant Name','accountant_name','text'],['paymentDate','Payment Date','payment_date','date']] as $field): ?><label class="text-sm"><?=h($field[1])?><input id="<?=h($field[0])?>" type="<?=h($field[3])?>" class="border p-2 rounded w-full" value="<?=h($workflow[$field[2]]??'')?>"></label><?php endforeach;?>
+<?php foreach([['preparationStatus','Preparation Status','preparation_status',['Pending','Prepared']],['approvalStatus','Approval Status','approval_status',['Pending','Approved']],['paymentStatus','Payment Status','payment_status',['Pending Pay','Paid']]] as $field): ?><label class="text-sm"><?=h($field[1])?><select id="<?=h($field[0])?>" class="border p-2 rounded w-full"><?php foreach($field[3] as $option):?><option value="<?=h($option)?>" <?=($workflow[$field[2]]??'')===$option?'selected':''?>><?=h($option)?></option><?php endforeach;?></select></label><?php endforeach;?></div></section>
+<section class="bg-white rounded shadow p-5"><h2 class="font-semibold text-lg mb-3">Salary Summary</h2><div class="grid sm:grid-cols-2 gap-2"><p>Basic salary: <strong id="sumBasic">Ksh <?=number_format($displayBasic,2)?></strong></p><p>Allowances: <strong id="sumAllow">Ksh <?=number_format($displayAllow,2)?></strong></p><p>Gross pay: <strong id="grossPay">Ksh <?=number_format($displayGross,2)?></strong></p><p>Taxable pay: <strong id="taxablePay">—</strong></p><p>Total deductions: <strong id="totalDeductions">Ksh <?=number_format($displayDed,2)?></strong></p><p class="font-bold text-blue-700">Net pay: <strong id="netPay">Ksh <?=number_format($displayNet,2)?></strong></p></div><p id="message" role="status" class="mt-3 text-sm"></p><div class="flex flex-wrap gap-3 mt-4"><button id="savePayrollBtn" class="bg-blue-600 text-white px-5 py-2 rounded">Save Payroll</button><a href="payroll_list.php" class="bg-gray-600 text-white px-5 py-2 rounded">Back to Payroll List</a></div></section>
+</main>
 <script>
-let grossPay = <?= (float) $gross_pay ?>;
-let totalDeductions = <?= (float) $estimated_deductions ?>;
-let netPay = <?= (float) $net_pay ?>;
-const baseSalary = <?= (float) $base_salary ?>;
-
-// Safely add a table row without inserting user input as HTML.
-function addTableRow(tableSelector, name, amount, suffix = "") {
-    const row = $("<tr>").addClass("border-b");
-
-    $("<td>")
-        .addClass("px-4 py-2")
-        .text(name)
-        .appendTo(row);
-
-    $("<td>")
-        .addClass("px-4 py-2")
-        .text(amount.toFixed(2) + suffix)
-        .appendTo(row);
-
-    $(tableSelector + " tbody").append(row);
+const userId=<?=json_encode($user_id)?>, baseSalary=<?=json_encode($displayBasic)?>;
+const existing=<?=json_encode($isExisting)?>, legacy=<?=json_encode($legacy)?>, locked=<?=json_encode($locked)?>;
+let allowances=<?=json_encode($allowances,JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP)?>;
+let custom=<?=json_encode($custom,JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP)?>;
+let calculated=null;
+const savedSummary=<?=json_encode(['gross_pay'=>$displayGross,'total_allowances'=>$displayAllow,'total_deductions'=>$displayDed,'net_pay'=>$displayNet])?>;
+const savedDeductions=<?=json_encode($saved['deductions']??[],JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP)?>;
+const $=id=>document.getElementById(id);
+const money=n=>'Ksh '+Number(n||0).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
+function cell(row,text,cls='p-2 border-b'){const td=document.createElement('td');td.className=cls;td.textContent=text;row.appendChild(td);return td;}
+function render(){
+ $('allowanceTable').tBodies[0].replaceChildren();
+ allowances.forEach((a,i)=>{const tr=document.createElement('tr');cell(tr,a.name);cell(tr,money(a.amount),'p-2 border-b text-right');const td=cell(tr,'');if(!locked&&!legacy){const b=document.createElement('button');b.textContent='Remove';b.className='text-red-700';b.onclick=()=>{allowances.splice(i,1);refresh();};td.appendChild(b);}$('allowanceTable').tBodies[0].appendChild(tr);});
+ $('deductionTable').tBodies[0].replaceChildren();
+ const lines=((legacy||locked)?savedDeductions:(calculated?.details?.deductions||[]));
+ lines.forEach(d=>{const tr=document.createElement('tr');cell(tr,d.name);cell(tr,d.type==='statutory'?'Statutory':d.type==='pension'?'6% of gross':(d.basis==='percent'?`${d.value}% gross`:'Fixed'));cell(tr,money(typeof d.amount==='number'?d.amount:parseFloat(d.amount)||0),'p-2 border-b text-right');const td=cell(tr,'');if(d.type==='custom'&&!locked&&!legacy){const index=custom.findIndex(x=>x.name===d.name);if(index>=0){const b=document.createElement('button');b.textContent='Remove';b.className='text-red-700';b.onclick=()=>{custom.splice(index,1);refresh();};td.appendChild(b);}}$('deductionTable').tBodies[0].appendChild(tr);});
+ const s=legacy||locked?savedSummary:calculated;
+ if(s){$('sumBasic').textContent=money(baseSalary);$('sumAllow').textContent=money(s.total_allowances);$('grossPay').textContent=money(s.gross_pay);$('totalDeductions').textContent=money(s.total_deductions);$('netPay').textContent=money(s.net_pay);$('taxablePay').textContent=s.taxable_pay===undefined?'Saved record':money(s.taxable_pay);}
 }
-
-// Add Manual Allowance
-$("#addAllowanceBtn").on("click", function (event) {
-    event.preventDefault();
-
-    const name = $("#manualAllowanceName").val().trim();
-    const amount = parseFloat($("#manualAllowanceAmount").val());
-
-    if (!name || !Number.isFinite(amount) || amount <= 0) {
-        alert("Enter valid allowance details.");
-        return;
-    }
-
-    addTableRow("#allowanceTable", name, amount);
-
-    grossPay += amount;
-    updateSummary();
-
-    $("#manualAllowanceName").val("");
-    $("#manualAllowanceAmount").val("");
-});
-
-// Add Manual Deduction
-$("#addDeductionBtn").on("click", function (event) {
-    event.preventDefault();
-
-    const name = $("#manualDeductionName").val().trim();
-    const amount = parseFloat($("#manualDeductionAmount").val());
-
-    if (!name || !Number.isFinite(amount) || amount <= 0) {
-        alert("Enter valid deduction details.");
-        return;
-    }
-
-    // Manual deductions are entered as amounts, not percentages.
-    addTableRow("#deductionTable", name, amount);
-
-    totalDeductions += amount;
-    updateSummary();
-
-    $("#manualDeductionName").val("");
-    $("#manualDeductionAmount").val("");
-});
-
-// Update salary summary
-function updateSummary() {
-    netPay = grossPay - totalDeductions;
-
-    $("#grossPay").text(
-        grossPay.toLocaleString("en-KE", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        })
-    );
-
-    $("#totalDeductions").text(
-        totalDeductions.toLocaleString("en-KE", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        })
-    );
-
-    $("#netPay").text(
-        netPay.toLocaleString("en-KE", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        })
-    );
+let requestNumber=0;
+async function refresh(){
+ if(legacy||locked){render();return;}
+ const seq=++requestNumber;const fd=new FormData();fd.set('user_id',userId);fd.set('month',$('payrollMonth').value);fd.set('year',$('payrollYear').value);fd.set('allowances',JSON.stringify(allowances));fd.set('other_deductions',JSON.stringify(custom));fd.set('pension_enabled',$('pensionEnabled').checked?'1':'0');fd.set('pension_tax_qualified',$('pensionQualified').checked?'1':'0');
+ $('message').textContent='Calculating...';calculated=null;
+ try{const res=await fetch('calculate_payroll.php',{method:'POST',body:fd});const data=await res.json();if(seq!==requestNumber)return;if(!res.ok)throw new Error(data.error||'Calculation failed');calculated=data;$('message').textContent='';render();}
+ catch(e){if(seq!==requestNumber)return;$('message').textContent=e.message;render();}
 }
-
-// Save payroll and all three workflow stages
-$("#savePayrollBtn").on("click", function (event) {
-    event.preventDefault();
-
-    const button = $(this);
-    const month = $("#payrollMonth").val();
-    const year = $("#payrollYear").val();
-
-    if (!month || !year) {
-        alert("Please select a month and year before saving.");
-        return;
-    }
-
-    // Collect allowances
-    const allowances = [];
-
-    $("#allowanceTable tbody tr").each(function () {
-        const cols = $(this).find("td");
-
-        if (cols.length >= 2) {
-            allowances.push({
-                name: $(cols[0]).text().trim(),
-                amount: parseFloat(
-                    $(cols[1]).text().replace(/,/g, "")
-                ) || 0
-            });
-        }
-    });
-
-    // Collect deductions. Existing percentage deductions are retained
-    // as percentages; manually added deductions are amounts.
-    const deductions = [];
-
-    $("#deductionTable tbody tr").each(function () {
-        const cols = $(this).find("td");
-
-        if (cols.length >= 2) {
-            const name = $(cols[0]).text().trim();
-            const amountText = $(cols[1]).text().trim();
-
-            deductions.push({
-                name: name,
-                amount: amountText.includes("%")
-                    ? amountText
-                    : (parseFloat(amountText.replace(/,/g, "")) || 0)
-            });
-        }
-    });
-
-    // Collect preparation, approval and payment information
-    const preparedBy = $("#preparedBy").val().trim();
-    const datePrepared = $("#datePrepared").val();
-    const preparationStatus = $("#preparationStatus").val();
-
-    const approvedBy = $("#approvedBy").val().trim();
-    const approvalDate = $("#approvalDate").val();
-    const approvalStatus = $("#approvalStatus").val();
-
-    const accountantName = $("#accountantName").val().trim();
-    const paymentDate = $("#paymentDate").val();
-    const paymentStatus = $("#paymentStatus").val();
-
-    // Client-side checks for completed stages.
-    // save_payroll.php must also validate these on the server.
-    if (preparationStatus === "Prepared" &&
-        (!preparedBy || !datePrepared)) {
-        alert("Enter the preparer's name and preparation date.");
-        return;
-    }
-
-    if (approvalStatus === "Approved" &&
-        (!approvedBy || !approvalDate)) {
-        alert("Enter the approver's name and approval date.");
-        return;
-    }
-
-    if (paymentStatus === "Paid" &&
-        (!accountantName || !paymentDate)) {
-        alert("Enter the accountant's name and payment date.");
-        return;
-    }
-
-    if (netPay < 0) {
-        alert("Total deductions cannot exceed gross pay.");
-        return;
-    }
-
-    const payload = {
-        user_id: <?= (int) $user_id ?>,
-        payroll_no: $("#payrollNo").val().trim(),
-        full_name: <?= json_encode($user['full_name'] ?? '') ?>,
-        base_salary: baseSalary,
-        total_allowances: grossPay - baseSalary,
-        total_deductions: totalDeductions,
-        net_pay: netPay,
-        month: month,
-        year: year,
-
-        // Preparation
-        prepared_by: preparedBy,
-        date_prepared: datePrepared,
-        preparation_status: preparationStatus,
-
-        // Approval
-        approved_by: approvedBy,
-        approval_date: approvalDate,
-        approval_status: approvalStatus,
-
-        // Payment
-        accountant_name: accountantName,
-        payment_date: paymentDate,
-        payment_status: paymentStatus,
-
-        details: JSON.stringify({
-            allowances: allowances,
-            deductions: deductions
-        })
-    };
-
-    button.prop("disabled", true).text("Saving...");
-
-    $.ajax({
-        url: "save_payroll.php",
-        type: "POST",
-        data: payload,
-        dataType: "text"
-    })
-    .done(function (response) {
-        alert(response);
-    })
-    .fail(function (xhr) {
-        const message = xhr.responseText
-            ? xhr.responseText
-            : "Unable to save payroll. Please try again.";
-
-        alert(message);
-    })
-    .always(function () {
-    button.prop("disabled", false).text(
-        <?= json_encode($isExistingPayroll ? 'Update Payroll' : 'Save Payroll') ?>
-    );
-});
-
-});
-
-
-$("#payrollMonth").on("change", function () {
-
-    const selectedMonth = $(this).val();
-    const selectedYear = $("#payrollYear").val();
-
-    const months = [
-        "January", "February", "March", "April",
-        "May", "June", "July", "August",
-        "September", "October", "November", "December"
-    ];
-
-    const monthNumber = String(
-        months.indexOf(selectedMonth) + 1
-    ).padStart(2, "0");
-
-    const userId = <?= (int) $user_id ?>;
-
-    window.location.href =
-        "process_payroll.php?id=" + userId +
-        "&month=" + selectedYear + "-" + monthNumber;
-});
-
-</script>
-</body>
-</html>
+$('addAllowance').onclick=()=>{const name=$('allowanceName').value.trim(),amount=Number($('allowanceAmount').value);if(!name||!Number.isFinite(amount)||amount<=0)return alert('Enter a valid allowance.');allowances.push({name,amount});$('allowanceName').value='';$('allowanceAmount').value='';refresh();};
+$('addDeduction').onclick=()=>{const name=$('deductionName').value.trim(),amount=Number($('deductionAmount').value);if(!name||!Number.isFinite(amount)||amount<=0)return alert('Enter a valid deduction.');if(/^(PAYE|NSSF|SHIF|SHA|AHL|HOUSING LEVY|AFFORDABLE HOUSING LEVY|PENSION|EMPLOYEE PENSION)$/i.test(name))return alert('Statutory deductions are automatic.');custom.push({name,type:'fixed',value:amount});$('deductionName').value='';$('deductionAmount').value='';refresh();};
+$('pensionEnabled').onchange=refresh;$('pensionQualified').onchange=refresh;
+if(locked||legacy){for(const id of ['allowanceName','allowanceAmount','addAllowance','deductionName','deductionAmount','addDeduction','pensionEnabled','pensionQualified'])$(id).disabled=true;}
+$('payrollMonth').onchange=()=>{const month=$('payrollMonth').selectedIndex+1;location.href='process_payroll.php?id='+userId+'&month='+$('payrollYear').value+'-'+String(month).padStart(2,'0');};
+$('savePayrollBtn').onclick=async()=>{
+ if(!existing&&!calculated)return alert('Payroll must calculate successfully before saving.');
+ if(!legacy&&!locked&&!calculated)return alert('Wait for payroll calculation.');
+ const val=id=>$(id).value.trim();
+ if(val('preparationStatus')==='Prepared'&&(!val('preparedBy')||!val('datePrepared')))return alert('Enter preparer and date.');
+ if(val('approvalStatus')==='Approved'&&(!val('approvedBy')||!val('approvalDate')))return alert('Enter approver and date.');
+ if(val('paymentStatus')==='Paid'&&(!val('accountantName')||!val('paymentDate')))return alert('Enter accountant and payment date.');
+ const fd=new FormData();
+ const data={user_id:userId,payroll_no:val('payrollNo'),month:val('payrollMonth'),year:val('payrollYear'),
+ prepared_by:val('preparedBy'),date_prepared:val('datePrepared'),preparation_status:val('preparationStatus'),
+ approved_by:val('approvedBy'),approval_date:val('approvalDate'),approval_status:val('approvalStatus'),
+ accountant_name:val('accountantName'),payment_date:val('paymentDate'),payment_status:val('paymentStatus')};
+ Object.entries(data).forEach(([k,v])=>fd.set(k,v));
+ if(!legacy&&!locked){fd.set('allowances',JSON.stringify(allowances));fd.set('other_deductions',JSON.stringify(custom));fd.set('pension_enabled',$('pensionEnabled').checked?'1':'0');fd.set('pension_tax_qualified',$('pensionQualified').checked?'1':'0');}
+ const btn=$('savePayrollBtn');btn.disabled=true;btn.textContent='Saving...';
+ try{const res=await fetch('save_payroll.php',{method:'POST',body:fd});const msg=await res.text();if(!res.ok)throw new Error(msg);alert(msg);location.reload();}
+ catch(e){alert(e.message);}finally{btn.disabled=false;btn.textContent='Save Payroll';}
+};
+refresh();
+</script></body></html>

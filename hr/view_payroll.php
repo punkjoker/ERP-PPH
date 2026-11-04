@@ -49,6 +49,104 @@ if (!$payroll) {
 $details = json_decode($payroll['details'], true);
 $manualAllowances = $details['allowances'] ?? [];
 $manualDeductions = $details['deductions'] ?? [];
+
+// Audit values are taken from the saved payroll snapshot, not recalculated.
+function auditValue($source, $paths) {
+    foreach ($paths as $path) {
+        $value = $source;
+        foreach (explode('.', $path) as $part) {
+            if (!is_array($value) || !array_key_exists($part, $value)) {
+                $value = null;
+                break;
+            }
+            $value = $value[$part];
+        }
+        if (is_numeric($value) && is_scalar($value)) return (float)$value;
+    }
+    return null;
+}
+function auditMoney($value) {
+    return $value === null ? 'Not recorded' : 'Ksh ' . number_format($value, 2);
+}
+function auditEsc($value) {
+    return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+$details = is_array($details) ? $details : [];
+$grossPay = (float)$payroll['base_salary'] + (float)$payroll['total_allowances'];
+// The following fields may vary across calculator versions. Add the exact
+// saved JSON key to these lists if your calculator uses another name.
+// In the original calculator calculation.taxable_pay is already AFTER pre-tax deductions.
+// Gross taxable earnings are the saved gross pay under the calculator's
+// documented assumption that all cash allowances are taxable.
+$taxablePay = auditValue($details, [
+    'audit.taxable_pay', 'audit.gross_taxable_pay',
+    'calculation.gross_taxable_pay', 'tax.gross_taxable_pay', 'gross_taxable_pay'
+]);
+if ($taxablePay === null && (($details['calculation']['rule_set'] ?? '') === 'KE_STANDARD_2026_02_PENSION')) {
+    $taxablePay = $grossPay;
+}
+$netTaxable = auditValue($details, [
+    'audit.net_taxable_pay', 'calculation.taxable_pay', 'calculation.net_taxable', 'calculation.net_taxable_pay',
+    'calculation.taxable_income', 'calculation.paye_taxable_pay',
+    'tax.net_taxable', 'tax.taxable_income', 'net_taxable',
+    'net_taxable_pay', 'taxable_income'
+]);
+$taxCharged = auditValue($details, [
+    'audit.tax_charged', 'calculation.paye_before_relief', 'calculation.tax_charged', 'calculation.gross_paye',
+    'calculation.tax_before_relief', 'tax.tax_charged',
+    'tax.gross_paye', 'tax_charged', 'gross_paye', 'tax_before_relief'
+]);
+$taxRelief = auditValue($details, [
+    'audit.tax_relief', 'calculation.tax_relief', 'calculation.personal_relief',
+    'calculation.relief_applied', 'tax.tax_relief',
+    'tax.personal_relief', 'tax_relief', 'personal_relief', 'relief_applied'
+]);
+$taxDeducted = auditValue($details, [
+    'audit.paye_deducted', 'calculation.tax_deducted', 'calculation.paye',
+    'calculation.paye_deducted', 'tax.tax_deducted',
+    'tax.paye', 'tax_deducted', 'paye', 'paye_deducted'
+]);
+// Use saved line items as a fallback for PAYE only, never as a tax calculation.
+if ($taxDeducted === null && is_array($manualDeductions)) {
+    foreach ($manualDeductions as $line) {
+        if (!is_array($line)) continue;
+        $lineName = strtoupper(trim((string)($line['name'] ?? $line['code'] ?? '')));
+        if ($lineName === 'PAYE' || $lineName === 'INCOME TAX (PAYE)') {
+            $v = $line['calculated_amount'] ?? $line['amount'] ?? null;
+            if (is_numeric($v)) { $taxDeducted = (float)$v; break; }
+        }
+    }
+}
+// The legacy personal_relief field represents entitlement, not necessarily used relief.
+// Derive applied relief only from saved pre-relief tax and saved PAYE.
+if ($taxCharged !== null && $taxDeducted !== null) {
+    $taxRelief = max(0.0, round($taxCharged - $taxDeducted, 2));
+}
+$auditFields = [
+    ['Taxable Pay', $taxablePay, 'Gross earnings treated as taxable in the saved calculation'],
+    ['Net Taxable Pay', $netTaxable, 'Taxable income after qualifying pre-tax deductions'],
+    ['Tax Charged', $taxCharged, 'PAYE calculated before tax relief'],
+    ['Tax Relief', $taxRelief, 'Tax relief actually applied in the saved calculation'],
+    ['Tax Deducted (PAYE)', $taxDeducted, 'Final PAYE withheld after relief'],
+    ['Net Pay', (float)$payroll['net_pay'], 'Saved employee take-home pay'],
+];
+// Explicitly show the deductions bridging gross taxable pay and net taxable pay.
+$preTaxLines = [];
+foreach ($manualDeductions as $line) {
+    if (!is_array($line)) continue;
+    $name = strtolower(trim((string)($line['name'] ?? '')));
+    $amount = $line['amount'] ?? null;
+    if (!is_numeric($amount)) continue;
+    if ($name === 'nssf' || $name === 'shif' || $name === 'affordable housing levy' || $name === 'ahl' || $name === 'housing levy') {
+        $preTaxLines[] = ['name' => $line['name'], 'amount' => (float)$amount];
+    } elseif (strpos($name, 'employee pension') !== false && !empty($details['pension']['tax_qualified'])) {
+        $preTaxLines[] = ['name' => 'Qualifying employee pension', 'amount' => (float)$amount];
+    }
+}
+$preTaxTotal = array_sum(array_column($preTaxLines, 'amount'));
+$preTaxReconciles = $taxablePay !== null && $netTaxable !== null && abs(($taxablePay - $preTaxTotal) - $netTaxable) <= 0.02;
+$hasMissingAudit = $taxablePay === null || $netTaxable === null || $taxCharged === null || $taxRelief === null || $taxDeducted === null;
+
 ?>
 
 <!DOCTYPE html>
@@ -142,7 +240,78 @@ $manualDeductions = $details['deductions'] ?? [];
         <p class="text-xl font-bold text-blue-700">Net Pay: Ksh <?= number_format($payroll['net_pay'], 2) ?></p>
     </div>
 
-    <div class="grid grid-cols-2 gap-6">
+    <!-- Payroll Tax & Audit Summary: historical saved values only -->
+    <section class="bg-white border border-gray-200 rounded-lg shadow-sm mb-6 overflow-hidden">
+        <div class="bg-gray-800 text-white px-5 py-4 flex flex-wrap items-center justify-between gap-2">
+            <div>
+                <h2 class="text-lg font-semibold">Payroll Tax &amp; Audit Summary</h2>
+                <p class="text-xs text-gray-300">Saved payroll snapshot | <?= auditEsc($monthName) ?> | Payroll #<?= auditEsc($payroll['payroll_no'] ?? '-') ?></p>
+            </div>
+            <span class="text-xs bg-gray-700 rounded px-3 py-1">KES</span>
+        </div>
+        <div class="p-5">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+                <div class="rounded-lg border bg-gray-50 p-4">
+                    <p class="text-xs uppercase tracking-wide text-gray-500">Basic Salary</p>
+                    <p class="font-bold text-gray-800 mt-1">Ksh <?= number_format((float)$payroll['base_salary'], 2) ?></p>
+                </div>
+                <div class="rounded-lg border bg-gray-50 p-4">
+                    <p class="text-xs uppercase tracking-wide text-gray-500">Allowances</p>
+                    <p class="font-bold text-gray-800 mt-1">Ksh <?= number_format((float)$payroll['total_allowances'], 2) ?></p>
+                </div>
+                <div class="rounded-lg border bg-blue-50 p-4">
+                    <p class="text-xs uppercase tracking-wide text-blue-700">Gross Pay</p>
+                    <p class="font-bold text-blue-900 mt-1">Ksh <?= number_format($grossPay, 2) ?></p>
+                </div>
+            </div>
+            <?php if ($preTaxLines && $taxablePay !== null): ?>
+            <div class="mb-5 border border-gray-200 rounded-lg overflow-hidden">
+                <h3 class="bg-gray-100 px-4 py-3 font-semibold text-gray-800">Qualifying Pre-Tax Deductions</h3>
+                <div class="px-4 py-3 text-sm flex justify-between"><span>Gross taxable earnings</span><strong><?= auditEsc(auditMoney($taxablePay)) ?></strong></div>
+                <?php foreach ($preTaxLines as $line): ?>
+                <div class="px-4 py-2 text-sm flex justify-between border-t"><span>Less: <?= auditEsc($line['name']) ?></span><span>(<?= auditEsc(auditMoney($line['amount'])) ?>)</span></div>
+                <?php endforeach; ?>
+                <div class="px-4 py-3 text-sm flex justify-between border-t bg-blue-50"><strong>Net taxable pay</strong><strong><?= auditEsc(auditMoney($netTaxable)) ?></strong></div>
+                <?php if (!$preTaxReconciles): ?>
+                <p class="px-4 py-2 text-xs text-yellow-800 bg-yellow-50">Pre-tax deduction lines do not fully reconcile to saved taxable income. The saved calculation remains authoritative; check pension qualification and deduction caps.</p>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm border-collapse">
+                    <thead><tr class="bg-gray-100 text-gray-700">
+                        <th class="text-left px-4 py-3">Audit Component</th>
+                        <th class="text-right px-4 py-3">Amount (KES)</th>
+                    </tr></thead>
+                    <tbody>
+                    <?php foreach ($auditFields as $field): ?>
+                        <tr class="border-b <?= $field[0] === 'Net Pay' ? 'bg-blue-50' : '' ?>">
+                            <td class="px-4 py-3">
+                                <span class="font-medium text-gray-800"><?= auditEsc($field[0]) ?></span>
+                                <p class="text-xs text-gray-500 mt-1"><?= auditEsc($field[2]) ?></p>
+                            </td>
+                            <td class="px-4 py-3 text-right whitespace-nowrap font-semibold <?= $field[1] === null ? 'text-yellow-700' : 'text-gray-900' ?>">
+                                <?= auditEsc(auditMoney($field[1])) ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-4 text-sm text-gray-700 border-t pt-3 flex flex-wrap justify-between gap-2">
+                <span><strong>Total Payroll Deductions:</strong> Ksh <?= number_format((float)$payroll['total_deductions'], 2) ?></span>
+                <span><strong>Gross less deductions:</strong> Ksh <?= number_format($grossPay - (float)$payroll['total_deductions'], 2) ?></span>
+            </div>
+            <?php if (abs(($grossPay - (float)$payroll['total_deductions']) - (float)$payroll['net_pay']) > 0.02): ?>
+                <p class="mt-3 rounded bg-red-50 border border-red-200 text-red-800 text-sm p-3">Audit exception: gross pay minus total deductions does not match saved net pay. Review the payroll snapshot.</p>
+            <?php endif; ?>
+            <?php if ($hasMissingAudit): ?>
+                <p class="mt-3 rounded bg-yellow-50 border border-yellow-200 text-yellow-900 text-sm p-3">Some tax audit fields are unavailable in this saved payroll record. They are shown as “Not recorded” rather than estimated. To complete the audit trail, save those figures in the payroll calculator's details JSON when processing future payrolls.</p>
+            <?php endif; ?>
+        </div>
+    </section>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Allowances -->
         <div class="bg-green-50 p-4 rounded-lg">
             <h2 class="text-lg font-semibold mb-2 text-green-700">Allowances Breakdown</h2>
@@ -185,13 +354,11 @@ $manualDeductions = $details['deductions'] ?? [];
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($manualDeductions as $d): 
-                    $rawValue = $d['amount'];
-                    $isPercentage = strpos($rawValue, '%') !== false;
-                    $rateDisplay = $isPercentage ? $rawValue : '-';
-                    $deductionAmount = $isPercentage 
-                        ? (floatval(preg_replace('/[^0-9.\-]/', '', $rawValue)) / 100) * $payroll['base_salary']
-                        : floatval(preg_replace('/[^0-9.\-]/', '', $rawValue));
+                <?php foreach ($manualDeductions as $d):
+                    if (!is_array($d)) continue;
+                    $basis = (string)($d['basis'] ?? '');
+                    $rateDisplay = ($basis === 'percent' && isset($d['value'])) ? number_format((float)$d['value'], 2) . '%' : (isset($d['rate']) && is_numeric($d['rate']) ? number_format((float)$d['rate'], 2) . '%' : '-');
+                    $deductionAmount = is_numeric($d['amount'] ?? null) ? (float)$d['amount'] : 0.0;
                 ?>
                     <tr class="border-b">
                         <td class="px-3 py-2"><?= htmlspecialchars($d['name']) ?></td>

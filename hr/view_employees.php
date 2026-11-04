@@ -226,27 +226,40 @@ function toggleContractFields(select, id) {
 }
 
 // ✅ AJAX Update
+
+// AJAX Update
 document.querySelectorAll(".updateForm").forEach(form => {
     form.addEventListener("submit", async function(e) {
         e.preventDefault();
+
         const formData = new FormData(this);
         const employeeId = this.dataset.id;
 
-        const response = await fetch("update_employe.php", {
-            method: "POST",
-            body: formData
-        });
+        try {
+            const response = await fetch("update_employe.php", {
+                method: "POST",
+                body: formData
+            });
 
-        const result = await response.text();
-        if (result.includes("success")) {
-            alert("Employee updated successfully!");
-            closeModal(`modal-${employeeId}`);
-            location.reload();
-        } else {
-            alert("Update failed. Please try again.");
+            const result = (await response.text()).trim();
+
+            console.log("Server response:", result);
+
+            if (response.ok && result.toLowerCase() === "success") {
+                alert("Employee updated successfully!");
+                closeModal(`modal-${employeeId}`);
+                location.reload();
+            } else {
+                alert("Update failed:\n" + result);
+            }
+
+        } catch (error) {
+            console.error("Update error:", error);
+            alert("Connection error: " + error.message);
         }
     });
 });
+
 </script>
 
 </body>

@@ -199,6 +199,12 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 }
 
     @media (max-width: 768px) {
+        html,
+        body {
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+
         .hr-sidebar {
             width: 260px;
             transform: translateX(-100%);
@@ -222,6 +228,38 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
         body.hr-layout-active {
             padding-left: 0;
+        }
+
+        /* Normalize legacy page wrappers when the sidebar is collapsed. */
+        main[class*="ml-64"],
+        main[class*="md:ml-64"],
+        .report-container {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+        }
+
+        main[class*="ml-64"] table,
+        main[class*="md:ml-64"] table,
+        .report-container table {
+            min-width: 640px;
+        }
+
+        main[class*="ml-64"] .overflow-x-auto,
+        main[class*="md:ml-64"] .overflow-x-auto,
+        .report-container .overflow-x-auto {
+            max-width: 100%;
+            overflow-x: auto;
+        }
+
+        input,
+        select,
+        textarea,
+        button {
+            max-width: 100%;
         }
     }
 </style>
@@ -251,7 +289,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                     LYNNTECH
                 </h2>
                 <p class="text-blue-400 text-xs mt-1 tracking-wider">
-                    HUMAN RESOURCES
+                    HUMAN RESOURCE
                 </p>
             </div>
         </div>
@@ -316,6 +354,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         <a href="hierarchy.php" class="hr-nav-link">
             <i class="fa-solid fa-file-lines"></i>
             <span>Hierarchy</span>
+        </a>
 
         <a href="create_staff_account.php" class="hr-nav-link">
             <i class="fa-solid fa-user-shield"></i>
@@ -343,6 +382,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         <a href="admin_field_schedule_report.php" class="hr-nav-link">
             <i class="fa-solid fa-calendar-days"></i>
             <span>Field Schedule</span>
+        </a>
 
         <a href="view_training_requests.php" class="hr-nav-link">
             <i class="fa-solid fa-graduation-cap"></i>
@@ -421,6 +461,29 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <i class="fa-solid fa-receipt"></i>
             <span>Deductions Reports</span>
         </a>
+        <a href="manage_saccos.php" class="hr-nav-link">
+    <i class="fa-solid fa-building-columns"></i>
+    <span>SACCO Management</span>
+</a>
+
+<a href="sacco_members.php" class="hr-nav-link">
+    <i class="fa-solid fa-users"></i>
+    <span>SACCO Members</span>
+</a>
+
+<a href="record_sacco_contribution.php" class="hr-nav-link">
+    <i class="fa-solid fa-hand-holding-dollar"></i>
+    <span>SACCO Contributions</span>
+</a>
+<a href="sacco_loans.php" class="hr-nav-link">
+    <i class="fa-solid fa-money-bill-wave"></i>
+    <span>SACCO Loans</span>
+    </a>
+
+<a href="sacco_reports.php" class="hr-nav-link">
+    <i class="fa-solid fa-chart-line"></i>
+    <span>SACCO Reports</span>
+</a>
 
         <a href="manage_expenses.php" class="hr-nav-link">
             <i class="fa-solid fa-wallet"></i>
@@ -477,7 +540,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         </a>
 
         <p class="text-center text-slate-600 text-xs mt-3">
-            Lynntech Manager
+            Lynntech Manager V1.2
         </p>
     </div>
 

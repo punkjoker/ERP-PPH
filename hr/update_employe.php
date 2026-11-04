@@ -38,13 +38,8 @@ try {
     $contract_end   = trim($_POST['contract_end'] ?? '');
 
     // Convert empty contract dates to NULL
-    $contract_start = ($contract_start !== '')
-        ? $contract_start
-        : null;
-
-    $contract_end = ($contract_end !== '')
-        ? $contract_end
-        : null;
+    $contract_start = ($contract_start !== '') ? $contract_start : null;
+    $contract_end   = ($contract_end !== '') ? $contract_end : null;
 
     // Validate employee ID
     if (!$employee_id || $employee_id <= 0) {
@@ -71,12 +66,12 @@ try {
     }
 
     // Check that the employee exists
-    $checkEmployee = $conn->prepare(
-        "SELECT employee_id
-         FROM employees
-         WHERE employee_id = ?
-         LIMIT 1"
-    );
+    $checkEmployee = $conn->prepare("
+        SELECT employee_id
+        FROM employees
+        WHERE employee_id = ?
+        LIMIT 1
+    ");
 
     $checkEmployee->bind_param("i", $employee_id);
     $checkEmployee->execute();
@@ -90,30 +85,48 @@ try {
 
     $checkEmployee->close();
 
-    // Prevent duplicate email addresses
+    // Prevent duplicate email in employees
     if ($email !== '') {
-        $checkEmail = $conn->prepare(
-            "SELECT employee_id
-             FROM employees
-             WHERE email = ?
-               AND employee_id <> ?
-             LIMIT 1"
-        );
+        $checkEmail = $conn->prepare("
+            SELECT employee_id
+            FROM employees
+            WHERE email = ?
+              AND employee_id <> ?
+            LIMIT 1
+        ");
 
         $checkEmail->bind_param("si", $email, $employee_id);
         $checkEmail->execute();
 
-        $emailResult = $checkEmail->get_result();
-
-        if ($emailResult->num_rows > 0) {
+        if ($checkEmail->get_result()->num_rows > 0) {
             $checkEmail->close();
-
             throw new Exception(
                 "This email address is already assigned to another employee."
             );
         }
 
         $checkEmail->close();
+
+        // Prevent duplicate email in users belonging to another employee
+        $checkUserEmail = $conn->prepare("
+            SELECT employee_id
+            FROM users
+            WHERE email = ?
+              AND employee_id <> ?
+            LIMIT 1
+        ");
+
+        $checkUserEmail->bind_param("si", $email, $employee_id);
+        $checkUserEmail->execute();
+
+        if ($checkUserEmail->get_result()->num_rows > 0) {
+            $checkUserEmail->close();
+            throw new Exception(
+                "This email address is already assigned to another user account."
+            );
+        }
+
+        $checkUserEmail->close();
     }
 
     // Automatically deactivate employees whose contracts have ended
@@ -125,7 +138,10 @@ try {
         }
     }
 
-    // Update employee, including email and contract information
+    // Start transaction: both updates must succeed together
+    $conn->begin_transaction();
+
+    // Update employee details
     $stmt = $conn->prepare("
         UPDATE employees
         SET first_name = ?,
@@ -169,11 +185,38 @@ try {
     $stmt->execute();
     $stmt->close();
 
+    // Synchronize email in users using employee_id
+    $userStmt = $conn->prepare("
+        UPDATE users
+        SET email = ?
+        WHERE employee_id = ?
+    ");
+
+    $userStmt->bind_param("si", $email, $employee_id);
+    $userStmt->execute();
+
+    $updatedUserAccounts = $userStmt->affected_rows;
+    $userStmt->close();
+
+    // Commit both updates
+    $conn->commit();
+
     echo "success";
 
-} catch (Exception $e) {
+} catch (Throwable $e) {
+
+    // Roll back if a transaction was started
+    if ($conn->errno === 0 || $conn->errno !== 0) {
+        try {
+            $conn->rollback();
+        } catch (Throwable $rollbackError) {
+            // Ignore rollback errors
+        }
+    }
+
     error_log("Employee update failed: " . $e->getMessage());
 
+    http_response_code(400);
     echo "error: " . $e->getMessage();
 
 } finally {

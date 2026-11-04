@@ -1,10 +1,13 @@
-
 <?php
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
 require_once 'db_con.php';
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 $conn->set_charset("utf8mb4");
@@ -28,11 +31,6 @@ $statuses = [
 
 $activityTypes = ['Routine', 'Planned'];
 
-/*
-|--------------------------------------------------------------------------
-| CSRF protection
-|--------------------------------------------------------------------------
-*/
 if (
     !isset($_SESSION['sales_report_csrf']) ||
     !is_string($_SESSION['sales_report_csrf']) ||
@@ -51,6 +49,7 @@ $error = '';
 | Helper functions
 |--------------------------------------------------------------------------
 */
+
 function salesH($value): string
 {
     return htmlspecialchars(
@@ -67,15 +66,24 @@ function salesValidDate(string $date): bool
     return $parsed !== false && $parsed->format('Y-m-d') === $date;
 }
 
-function salesRedirect(string $message, string $type = 'success'): void
-{
+function salesRedirect(
+    string $message,
+    string $type = 'success',
+    int $reportId = 0
+): void {
     $key = $type === 'error'
         ? 'sales_report_error'
         : 'sales_report_success';
 
     $_SESSION[$key] = $message;
 
-    header("Location: sales_daily_report.php");
+    $url = 'sales_daily_report.php';
+
+    if ($reportId > 0) {
+        $url .= '?mode=edit&report_id=' . $reportId;
+    }
+
+    header("Location: " . $url);
     exit;
 }
 
@@ -115,7 +123,6 @@ function salesGetEmployeeId(mysqli $conn, int $userId): int
         );
     }
 
-    // Preferred relationship: users.employee_id -> employees.employee_id
     if (in_array('employee_id', $userColumns, true)) {
         $stmt = $conn->prepare("
             SELECT e.employee_id
@@ -128,20 +135,19 @@ function salesGetEmployeeId(mysqli $conn, int $userId): int
 
         $stmt->bind_param('i', $userId);
         $stmt->execute();
+
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
         if (!$row || empty($row['employee_id'])) {
             throw new Exception(
-                'Your login account is not linked to an employee record. '
-                . 'Please contact the administrator.'
+                'Your login account is not linked to an employee record.'
             );
         }
 
         return (int) $row['employee_id'];
     }
 
-    // Alternative relationship: users.email -> employees.email
     if (
         in_array('email', $userColumns, true) &&
         in_array('email', $employeeColumns, true)
@@ -157,6 +163,7 @@ function salesGetEmployeeId(mysqli $conn, int $userId): int
 
         $stmt->bind_param('i', $userId);
         $stmt->execute();
+
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
@@ -170,8 +177,7 @@ function salesGetEmployeeId(mysqli $conn, int $userId): int
     }
 
     throw new Exception(
-        'Could not identify the employee relationship. '
-        . 'Link users to employees using employee_id or matching email.'
+        'Could not identify the employee relationship.'
     );
 }
 
@@ -236,43 +242,402 @@ function salesGetActivities(mysqli $conn, int $reportId): array
     return $activities;
 }
 
-function salesExcelCell(string $value): string
-{
-    // Prevent spreadsheet formula injection.
-    if (preg_match('/^[\s]*[=+\-@]/u', $value)) {
-        $value = "'" . $value;
-    }
+/*
+|--------------------------------------------------------------------------
+| Normalize Excel headings
+|--------------------------------------------------------------------------
+*/
 
-    return htmlspecialchars(
-        $value,
-        ENT_QUOTES | ENT_SUBSTITUTE,
-        'UTF-8'
-    );
+function salesNormalizeHeading(string $heading): string
+{
+    $heading = strtoupper(trim($heading));
+    $heading = preg_replace('/[^A-Z0-9]+/', ' ', $heading);
+
+    return trim(preg_replace('/\s+/', ' ', $heading));
 }
 
 /*
 |--------------------------------------------------------------------------
-| Resolve logged-in employee
+| Normalize activity type
 |--------------------------------------------------------------------------
 */
+
+function salesNormalizeType(string $type): string
+{
+    $type = strtolower(trim($type));
+    $type = preg_replace('/[\s_-]+/', ' ', $type);
+
+    $map = [
+        '' => 'Routine',
+        'routine' => 'Routine',
+        'planned' => 'Planned',
+        'plan' => 'Planned'
+    ];
+
+    if (!isset($map[$type])) {
+        throw new Exception(
+            "Invalid activity type '{$type}'. Use Routine or Planned."
+        );
+    }
+
+    return $map[$type];
+}
+
+/*
+|--------------------------------------------------------------------------
+| Normalize activity status
+|--------------------------------------------------------------------------
+| Accept any status text from Excel.
+| Blank status defaults to Pending.
+|--------------------------------------------------------------------------
+*/
+
+function salesNormalizeStatus(string $status): string
+{
+    $status = trim($status);
+
+    return $status === '' ? 'Pending' : $status;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Read and import Excel workbook
+|--------------------------------------------------------------------------
+*/
+
+function salesImportExcel(string $filePath): array
+{
+    $spreadsheet = IOFactory::load($filePath);
+    $sheet = $spreadsheet->getActiveSheet();
+
+    $highestRow = $sheet->getHighestDataRow();
+    $highestColumn = $sheet->getHighestDataColumn();
+
+    $highestColumnIndex =
+        \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString(
+            $highestColumn
+        );
+
+    $headerRow = null;
+    $columns = [];
+
+    $headerAliases = [
+        'DESCRIPTION' => [
+            'DESCRIPTION',
+            'SALES ACTIVITY',
+            'ACTIVITY DESCRIPTION',
+            'SALES ACTIVITY DESCRIPTION'
+        ],
+
+        'INDICATORS OF PERFORMANCE' => [
+            'INDICATORS OF PERFORMANCE',
+            'PERFORMANCE INDICATORS',
+            'INDICATORS',
+            'KPI'
+        ],
+
+        'OUTCOME' => [
+            'OUTCOME',
+            'RESULT',
+            'RESULTS',
+            'OUTCOME RESULTS'
+        ],
+
+        'ROUTINE PLANNED' => [
+            'ROUTINE PLANNED',
+            'ROUTINE OR PLANNED',
+            'ACTIVITY TYPE',
+            'TYPE'
+        ],
+
+        'STATUS' => [
+            'STATUS',
+            'ACTIVITY STATUS'
+        ]
+    ];
+
+    $requiredHeaders = [
+        'DESCRIPTION',
+        'INDICATORS OF PERFORMANCE',
+        'OUTCOME',
+        'ROUTINE PLANNED',
+        'STATUS'
+    ];
+
+    /*
+     * Search the first 20 rows for the header row.
+     */
+    for ($r = 1; $r <= min(20, $highestRow); $r++) {
+        $rowHeaders = [];
+
+        for ($c = 1; $c <= $highestColumnIndex; $c++) {
+            $value = $sheet->getCell([$c, $r])->getValue();
+            $normalized = salesNormalizeHeading((string) $value);
+
+            if ($normalized !== '') {
+                $rowHeaders[$c] = $normalized;
+            }
+        }
+
+        $found = [];
+
+        foreach ($rowHeaders as $columnNumber => $heading) {
+            foreach ($headerAliases as $standard => $aliases) {
+                if (in_array($heading, $aliases, true)) {
+                    $found[$standard] = $columnNumber;
+                    break;
+                }
+            }
+        }
+
+        $matchedHeaders = count(
+            array_intersect(
+                $requiredHeaders,
+                array_keys($found)
+            )
+        );
+
+        if (
+            isset($found['DESCRIPTION']) &&
+            $matchedHeaders >= 4
+        ) {
+            $headerRow = $r;
+            $columns = $found;
+            break;
+        }
+    }
+
+    if ($headerRow === null) {
+        throw new Exception(
+            'Could not find the Excel header row. '
+            . 'Make sure your workbook contains a DESCRIPTION column.'
+        );
+    }
+
+    $activities = [];
+
+    for ($r = $headerRow + 1; $r <= $highestRow; $r++) {
+        $values = [];
+
+        foreach ($requiredHeaders as $header) {
+            $columnNumber = $columns[$header] ?? null;
+
+            if ($columnNumber === null) {
+                $values[$header] = '';
+                continue;
+            }
+
+            $cell = $sheet->getCell([$columnNumber, $r]);
+
+            if ($cell->getDataType() === DataType::TYPE_FORMULA) {
+                throw new Exception(
+                    "Formula detected in Excel row {$r}. "
+                    . "Please replace formulas with their actual values."
+                );
+            }
+
+            $value = $cell->getFormattedValue();
+            $values[$header] = trim((string) $value);
+        }
+
+        // Skip completely empty rows.
+        if (
+            $values['DESCRIPTION'] === '' &&
+            $values['INDICATORS OF PERFORMANCE'] === '' &&
+            $values['OUTCOME'] === '' &&
+            $values['ROUTINE PLANNED'] === '' &&
+            $values['STATUS'] === ''
+        ) {
+            continue;
+        }
+
+        if ($values['DESCRIPTION'] === '') {
+            throw new Exception(
+                "Missing activity description in Excel row {$r}."
+            );
+        }
+
+        try {
+            $type = salesNormalizeType($values['ROUTINE PLANNED']);
+            $status = salesNormalizeStatus($values['STATUS']);
+        } catch (Exception $e) {
+            throw new Exception(
+                "Excel row {$r}: " . $e->getMessage()
+            );
+        }
+
+        $activities[] = [
+            'description' => $values['DESCRIPTION'],
+            'indicators' => $values['INDICATORS OF PERFORMANCE'],
+            'outcome' => $values['OUTCOME'],
+            'type' => $type,
+            'status' => $status
+        ];
+
+        if (count($activities) > 100) {
+            throw new Exception(
+                'The Excel file contains more than 100 activities. '
+                . 'Please split the report into smaller files.'
+            );
+        }
+    }
+
+    $spreadsheet->disconnectWorksheets();
+    unset($spreadsheet);
+
+    if (count($activities) < 1) {
+        throw new Exception(
+            'No sales activities were found in the Excel file.'
+        );
+    }
+
+    return $activities;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Save activities to database
+|--------------------------------------------------------------------------
+| Returns the report ID after a successful save.
+|--------------------------------------------------------------------------
+*/
+
+function salesSaveActivities(
+    mysqli $conn,
+    int $employeeId,
+    int $reportId,
+    string $reportDate,
+    array $activities,
+    bool $isEditing
+): int {
+    $conn->begin_transaction();
+
+    try {
+        if ($isEditing) {
+            $existing = salesGetOwnedReport(
+                $conn,
+                $reportId,
+                $employeeId
+            );
+
+            if (!$existing) {
+                throw new Exception(
+                    'Report not found or you do not have permission to edit it.'
+                );
+            }
+
+            $stmt = $conn->prepare("
+                UPDATE sales_daily_reports
+                SET report_date = ?
+                WHERE report_id = ?
+                  AND employee_id = ?
+            ");
+
+            $stmt->bind_param(
+                'sii',
+                $reportDate,
+                $reportId,
+                $employeeId
+            );
+
+            $stmt->execute();
+            $stmt->close();
+
+            $stmt = $conn->prepare("
+                DELETE FROM sales_daily_report_activities
+                WHERE report_id = ?
+            ");
+
+            $stmt->bind_param('i', $reportId);
+            $stmt->execute();
+            $stmt->close();
+
+        } else {
+            $stmt = $conn->prepare("
+                INSERT INTO sales_daily_reports
+                    (employee_id, report_date)
+                VALUES (?, ?)
+            ");
+
+            $stmt->bind_param('is', $employeeId, $reportDate);
+            $stmt->execute();
+
+            $reportId = (int) $conn->insert_id;
+            $stmt->close();
+        }
+
+        if ($reportId <= 0) {
+            throw new Exception(
+                'Could not identify the saved report.'
+            );
+        }
+
+        $stmt = $conn->prepare("
+            INSERT INTO sales_daily_report_activities
+                (
+                    report_id,
+                    description,
+                    performance_indicators,
+                    outcome,
+                    activity_type,
+                    status
+                )
+            VALUES (?, ?, ?, ?, ?, ?)
+        ");
+
+        foreach ($activities as $activity) {
+            $stmt->bind_param(
+                'isssss',
+                $reportId,
+                $activity['description'],
+                $activity['indicators'],
+                $activity['outcome'],
+                $activity['type'],
+                $activity['status']
+            );
+
+            $stmt->execute();
+        }
+
+        $stmt->close();
+
+        $conn->commit();
+
+        // Important: return the ID so the page can load the saved report.
+        return $reportId;
+
+    } catch (Throwable $e) {
+        $conn->rollback();
+        throw $e;
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Resolve employee
+|--------------------------------------------------------------------------
+*/
+
 try {
     $employeeId = salesGetEmployeeId($conn, $userId);
+
 } catch (Throwable $e) {
     error_log('Sales report employee lookup: ' . $e->getMessage());
 
     http_response_code(403);
+
     exit(
         'Your login account could not be linked to an employee record. '
-        . 'Please contact the administrator to check the users/employees '
-        . 'relationship.'
+        . 'Please contact the administrator.'
     );
 }
 
 /*
 |--------------------------------------------------------------------------
-| Export report
+| Handle export
 |--------------------------------------------------------------------------
 */
+
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 if ($action === 'export') {
@@ -320,15 +685,18 @@ if ($action === 'export') {
                 border-collapse: collapse;
                 width: 100%;
             }
+
             th, td {
                 border: 1px solid #555;
                 padding: 8px;
                 vertical-align: top;
             }
+
             th {
                 background: #d9e8d5;
                 font-weight: bold;
             }
+
             .heading {
                 font-size: 16px;
                 font-weight: bold;
@@ -336,52 +704,50 @@ if ($action === 'export') {
         </style>
     </head>
     <body>
-        <table>
-            <tr>
-                <td colspan="6" class="heading">
-                    LYNNTECH MANAGER - SALES DAILY REPORT
-                </td>
-            </tr>
-            <tr>
-                <td colspan="2"><strong>Reporting Date</strong></td>
-                <td colspan="4">
-                    <?= salesExcelCell($report['report_date']) ?>
-                </td>
-            </tr>
-            <tr>
-                <td colspan="2"><strong>Staff Member</strong></td>
-                <td colspan="4">
-                    <?= salesExcelCell(
-                        $report['first_name'] . ' ' . $report['last_name']
-                    ) ?>
-                </td>
-            </tr>
-            <tr>
-                <th>No.</th>
-                <th>Sales Activity</th>
-                <th>Indicators of Performance</th>
-                <th>Outcome</th>
-                <th>Routine / Planned</th>
-                <th>Status</th>
-            </tr>
+    <table>
+        <tr>
+            <td colspan="6" class="heading">
+                LYNNTECH MANAGER - SALES DAILY REPORT
+            </td>
+        </tr>
 
-            <?php foreach ($activities as $index => $activity): ?>
-                <tr>
-                    <td><?= $index + 1 ?></td>
-                    <td><?= nl2br(salesExcelCell(
-                        $activity['description']
-                    )) ?></td>
-                    <td><?= nl2br(salesExcelCell(
-                        $activity['performance_indicators'] ?? ''
-                    )) ?></td>
-                    <td><?= nl2br(salesExcelCell(
-                        $activity['outcome'] ?? ''
-                    )) ?></td>
-                    <td><?= salesExcelCell($activity['activity_type']) ?></td>
-                    <td><?= salesExcelCell($activity['status']) ?></td>
-                </tr>
-            <?php endforeach; ?>
-        </table>
+        <tr>
+            <td colspan="2"><strong>Reporting Date</strong></td>
+            <td colspan="4">
+                <?= salesH($report['report_date']) ?>
+            </td>
+        </tr>
+
+        <tr>
+            <td colspan="2"><strong>Staff Member</strong></td>
+            <td colspan="4">
+                <?= salesH(
+                    $report['first_name'] . ' ' . $report['last_name']
+                ) ?>
+            </td>
+        </tr>
+
+        <tr>
+            <th>No.</th>
+            <th>Sales Activity</th>
+            <th>Indicators of Performance</th>
+            <th>Outcome</th>
+            <th>Routine / Planned</th>
+            <th>Status</th>
+        </tr>
+
+        <?php foreach ($activities as $index => $activity): ?>
+            <tr>
+                <td><?= $index + 1 ?></td>
+                <td><?= nl2br(salesH($activity['description'])) ?></td>
+                <td><?= nl2br(salesH($activity['performance_indicators'])) ?></td>
+                <td><?= nl2br(salesH($activity['outcome'])) ?></td>
+                <td><?= salesH($activity['activity_type']) ?></td>
+                <td><?= salesH($activity['status']) ?></td>
+            </tr>
+        <?php endforeach; ?>
+
+    </table>
     </body>
     </html>
     <?php
@@ -390,10 +756,142 @@ if ($action === 'export') {
 
 /*
 |--------------------------------------------------------------------------
-| Save or update report
+| Handle Excel import
 |--------------------------------------------------------------------------
 */
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    $action === 'import'
+) {
+    $submittedToken = $_POST['csrf_token'] ?? '';
+
+    if (
+        !is_string($submittedToken) ||
+        !hash_equals($_SESSION['sales_report_csrf'], $submittedToken)
+    ) {
+        salesRedirect(
+            'Invalid session token. Reload and try again.',
+            'error'
+        );
+    }
+
+    $reportDate = trim(
+        (string) ($_POST['import_report_date'] ?? '')
+    );
+
+    $reportIdValue = filter_var(
+        $_POST['import_report_id'] ?? '0',
+        FILTER_VALIDATE_INT
+    );
+
+    $reportId = ($reportIdValue && $reportIdValue > 0)
+        ? (int) $reportIdValue
+        : 0;
+
+    if (!salesValidDate($reportDate)) {
+        salesRedirect(
+            'Please select a valid reporting date.',
+            'error',
+            $reportId
+        );
+    }
+
+    if ($reportDate > $today) {
+        salesRedirect(
+            'The reporting date cannot be in the future.',
+            'error',
+            $reportId
+        );
+    }
+
+    if (
+        !isset($_FILES['excel_file']) ||
+        $_FILES['excel_file']['error'] !== UPLOAD_ERR_OK
+    ) {
+        salesRedirect(
+            'Please select a valid Excel file to import.',
+            'error',
+            $reportId
+        );
+    }
+
+    $file = $_FILES['excel_file'];
+
+    if ($file['size'] > 10 * 1024 * 1024) {
+        salesRedirect(
+            'The Excel file must not exceed 10 MB.',
+            'error',
+            $reportId
+        );
+    }
+
+    $extension = strtolower(
+        pathinfo($file['name'], PATHINFO_EXTENSION)
+    );
+
+    if (!in_array($extension, ['xlsx', 'xls'], true)) {
+        salesRedirect(
+            'Only Excel .xlsx and .xls files are accepted.',
+            'error',
+            $reportId
+        );
+    }
+
+    try {
+        $activities = salesImportExcel($file['tmp_name']);
+
+        // Capture the ID returned by the save function.
+        $savedReportId = salesSaveActivities(
+            $conn,
+            $employeeId,
+            $reportId,
+            $reportDate,
+            $activities,
+            $reportId > 0
+        );
+
+        // Redirect directly to the saved report in Edit mode.
+        salesRedirect(
+            count($activities) .
+            ' sales activities imported successfully from Excel. '
+            . 'You can now review and edit them.',
+            'success',
+            $savedReportId
+        );
+
+    } catch (Throwable $e) {
+        error_log('Sales Excel import: ' . $e->getMessage());
+
+        if (
+            $e instanceof mysqli_sql_exception &&
+            (int) $e->getCode() === 1062
+        ) {
+            salesRedirect(
+                'A report already exists for this date. '
+                . 'Open that report and use Edit to import and replace its activities.',
+                'error'
+            );
+        }
+
+        salesRedirect(
+            $e->getMessage(),
+            'error',
+            $reportId
+        );
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Handle manual save/update
+|--------------------------------------------------------------------------
+*/
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    $action === 'save'
+) {
     $submittedToken = $_POST['csrf_token'] ?? '';
 
     if (
@@ -406,7 +904,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
         );
     }
 
-    $reportDate = trim((string) ($_POST['report_date'] ?? ''));
+    $reportDate = trim(
+        (string) ($_POST['report_date'] ?? '')
+    );
 
     $reportIdValue = filter_var(
         $_POST['report_id'] ?? '0',
@@ -418,13 +918,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
         : 0;
 
     if (!salesValidDate($reportDate)) {
-        salesRedirect('Please select a valid reporting date.', 'error');
+        salesRedirect(
+            'Please select a valid reporting date.',
+            'error',
+            $reportId
+        );
     }
 
     if ($reportDate > $today) {
         salesRedirect(
             'The reporting date cannot be in the future.',
-            'error'
+            'error',
+            $reportId
         );
     }
 
@@ -441,7 +946,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
         !is_array($types) ||
         !is_array($activityStatuses)
     ) {
-        salesRedirect('Invalid activity information.', 'error');
+        salesRedirect(
+            'Invalid activity information.',
+            'error',
+            $reportId
+        );
     }
 
     $rowCount = count($descriptions);
@@ -455,9 +964,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
         count($activityStatuses) !== $rowCount
     ) {
         salesRedirect(
-            'Add at least one activity. A maximum of 100 activities '
-            . 'can be saved in one report.',
-            'error'
+            'Add at least one activity. A maximum of 100 activities is allowed.',
+            'error',
+            $reportId
         );
     }
 
@@ -465,35 +974,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
 
     for ($i = 0; $i < $rowCount; $i++) {
         if (
+            !isset(
+                $descriptions[$i],
+                $indicators[$i],
+                $outcomes[$i],
+                $types[$i],
+                $activityStatuses[$i]
+            ) ||
             !is_string($descriptions[$i]) ||
             !is_string($indicators[$i]) ||
             !is_string($outcomes[$i]) ||
             !is_string($types[$i]) ||
             !is_string($activityStatuses[$i])
         ) {
-            salesRedirect('Invalid activity fields.', 'error');
+            salesRedirect(
+                'Invalid activity fields.',
+                'error',
+                $reportId
+            );
         }
 
         $description = trim($descriptions[$i]);
         $indicator = trim($indicators[$i]);
         $outcome = trim($outcomes[$i]);
-        $type = trim($types[$i]);
-        $activityStatus = trim($activityStatuses[$i]);
 
         if ($description === '') {
             salesRedirect(
                 'Every sales activity must have a description.',
-                'error'
+                'error',
+                $reportId
             );
         }
 
-        if (
-            !in_array($type, $activityTypes, true) ||
-            !in_array($activityStatus, $statuses, true)
-        ) {
+        try {
+            $type = salesNormalizeType($types[$i]);
+            $status = salesNormalizeStatus($activityStatuses[$i]);
+
+        } catch (Exception $e) {
             salesRedirect(
-                'An activity has an invalid type or status.',
-                'error'
+                $e->getMessage(),
+                'error',
+                $reportId
             );
         }
 
@@ -502,113 +1023,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
             'indicators' => $indicator,
             'outcome' => $outcome,
             'type' => $type,
-            'status' => $activityStatus
+            'status' => $status
         ];
     }
 
-    $isEditing = $reportId > 0;
-    $transactionStarted = false;
-
     try {
-        $conn->begin_transaction();
-        $transactionStarted = true;
-
-        if ($isEditing) {
-            $existingReport = salesGetOwnedReport(
-                $conn,
-                $reportId,
-                $employeeId
-            );
-
-            if (!$existingReport) {
-                throw new Exception(
-                    'Report not found or you do not have permission to edit it.'
-                );
-            }
-
-            $stmt = $conn->prepare("
-                UPDATE sales_daily_reports
-                SET report_date = ?
-                WHERE report_id = ?
-                  AND employee_id = ?
-            ");
-
-            $stmt->bind_param(
-                'sii',
-                $reportDate,
-                $reportId,
-                $employeeId
-            );
-            $stmt->execute();
-            $stmt->close();
-
-            // Replace this report's activities within the same transaction.
-            $stmt = $conn->prepare("
-                DELETE FROM sales_daily_report_activities
-                WHERE report_id = ?
-            ");
-
-            $stmt->bind_param('i', $reportId);
-            $stmt->execute();
-            $stmt->close();
-
-        } else {
-            $stmt = $conn->prepare("
-                INSERT INTO sales_daily_reports
-                    (employee_id, report_date)
-                VALUES (?, ?)
-            ");
-
-            $stmt->bind_param('is', $employeeId, $reportDate);
-            $stmt->execute();
-
-            $reportId = (int) $conn->insert_id;
-            $stmt->close();
-        }
-
-        $stmt = $conn->prepare("
-            INSERT INTO sales_daily_report_activities
-                (
-                    report_id,
-                    description,
-                    performance_indicators,
-                    outcome,
-                    activity_type,
-                    status
-                )
-            VALUES (?, ?, ?, ?, ?, ?)
-        ");
-
-        foreach ($activities as $activity) {
-            $stmt->bind_param(
-                'isssss',
-                $reportId,
-                $activity['description'],
-                $activity['indicators'],
-                $activity['outcome'],
-                $activity['type'],
-                $activity['status']
-            );
-
-            $stmt->execute();
-        }
-
-        $stmt->close();
-
-        $conn->commit();
-        $transactionStarted = false;
+        $savedReportId = salesSaveActivities(
+            $conn,
+            $employeeId,
+            $reportId,
+            $reportDate,
+            $activities,
+            $reportId > 0
+        );
 
         salesRedirect(
-            $isEditing
+            $reportId > 0
                 ? 'Daily sales report updated successfully.'
-                : 'Daily sales report saved successfully.'
+                : 'Daily sales report saved successfully.',
+            'success',
+            $savedReportId
         );
 
     } catch (Throwable $e) {
-        if ($transactionStarted) {
-            $conn->rollback();
-        }
-
         error_log('Sales daily report save: ' . $e->getMessage());
 
         if (
@@ -622,10 +1059,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
         }
 
         salesRedirect(
-            $e instanceof Exception
-                ? $e->getMessage()
-                : 'Unable to save the report. Please try again.',
-            'error'
+            $e->getMessage(),
+            'error',
+            $reportId
         );
     }
 }
@@ -635,8 +1071,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
 | Load selected report
 |--------------------------------------------------------------------------
 */
+
 $selectedReport = null;
 $selectedActivities = [];
+
 $mode = $_GET['mode'] ?? 'form';
 
 $requestedReportId = filter_var(
@@ -673,6 +1111,7 @@ if ($requestedReportId && $requestedReportId > 0) {
 | Flash messages
 |--------------------------------------------------------------------------
 */
+
 if (isset($_SESSION['sales_report_success'])) {
     $success = $_SESSION['sales_report_success'];
     unset($_SESSION['sales_report_success']);
@@ -685,11 +1124,28 @@ if (isset($_SESSION['sales_report_error'])) {
 
 $defaultDate = $selectedReport['report_date'] ?? $today;
 
+$staffName = trim(
+    (string) ($_SESSION['first_name'] ?? '') . ' ' .
+    (string) ($_SESSION['last_name'] ?? '')
+);
+
+if ($staffName === '' && $selectedReport) {
+    $staffName = trim(
+        $selectedReport['first_name'] . ' ' .
+        $selectedReport['last_name']
+    );
+}
+
+if ($staffName === '') {
+    $staffName = 'Logged-in staff member';
+}
+
 /*
 |--------------------------------------------------------------------------
-| Load report history for the logged-in employee
+| Report history
 |--------------------------------------------------------------------------
 */
+
 $reports = [];
 
 $stmt = $conn->prepare("
@@ -724,23 +1180,8 @@ while ($row = $result->fetch_assoc()) {
 }
 
 $stmt->close();
-
-$staffName = trim(
-    (string) ($_SESSION['first_name'] ?? '') . ' ' .
-    (string) ($_SESSION['last_name'] ?? '')
-);
-
-if ($staffName === '' && $selectedReport) {
-    $staffName = trim(
-        $selectedReport['first_name'] . ' ' .
-        $selectedReport['last_name']
-    );
-}
-
-if ($staffName === '') {
-    $staffName = 'Logged-in staff member';
-}
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -813,12 +1254,14 @@ if ($staffName === '') {
 
     <div class="flex flex-col md:flex-row md:items-center
                 md:justify-between gap-4 mb-6">
+
         <div>
             <h1 class="text-2xl font-bold text-gray-900">
                 Sales Daily Report
             </h1>
+
             <p class="text-sm text-gray-500 mt-1">
-                Record, manage and export your daily sales activities.
+                Record, import, manage and export your daily sales activities.
             </p>
         </div>
 
@@ -842,12 +1285,125 @@ if ($staffName === '') {
         </div>
     <?php endif; ?>
 
-    <!-- New or edit report form -->
     <?php if ($mode !== 'view'): ?>
+
+        <!-- Excel import -->
+        <div class="sales-card p-5 mb-6">
+
+            <div class="flex flex-col md:flex-row md:items-center
+                        md:justify-between gap-3 mb-4">
+
+                <div>
+                    <h2 class="text-lg font-bold text-gray-900">
+                        Import Sales Activities from Excel
+                    </h2>
+
+                    <p class="text-sm text-gray-500 mt-1">
+                        Upload your completed sales daily report workbook.
+                    </p>
+                </div>
+
+                <span class="text-xs font-semibold rounded-full
+                             bg-green-100 text-green-800 px-3 py-1">
+                    Excel Import
+                </span>
+            </div>
+
+            <form method="POST"
+                  action="sales_daily_report.php"
+                  enctype="multipart/form-data"
+                  class="space-y-4">
+
+                <input type="hidden" name="action" value="import">
+
+                <input type="hidden"
+                       name="csrf_token"
+                       value="<?= salesH($csrfToken) ?>">
+
+                <input type="hidden"
+                       name="import_report_id"
+                       value="<?= (int) ($selectedReport['report_id'] ?? 0) ?>">
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                    <div>
+                        <label class="sales-label">
+                            Reporting Date *
+                        </label>
+
+                        <input type="date"
+                               name="import_report_date"
+                               class="sales-input"
+                               value="<?= salesH($defaultDate) ?>"
+                               max="<?= salesH($today) ?>"
+                               required>
+                    </div>
+
+                    <div>
+                        <label class="sales-label">
+                            Select Excel Workbook *
+                        </label>
+
+                        <input type="file"
+                               name="excel_file"
+                               class="sales-input"
+                               accept=".xlsx,.xls"
+                               required>
+
+                        <p class="text-xs text-gray-500 mt-1">
+                            Accepted formats: .xlsx and .xls.
+                            Maximum size: 10 MB.
+                        </p>
+                    </div>
+
+                </div>
+
+                <div class="bg-blue-50 border border-blue-100
+                            rounded-lg p-3 text-sm text-blue-800">
+
+                    <strong>Expected Excel columns:</strong>
+
+                    <div class="mt-2 flex flex-wrap gap-2">
+
+                        <?php foreach ([
+                            'DESCRIPTION',
+                            'INDICATORS OF PERFORMANCE',
+                            'OUTCOME',
+                            'ROUTINE / PLANNED',
+                            'STATUS'
+                        ] as $heading): ?>
+
+                            <span class="bg-white border border-blue-200
+                                         rounded px-2 py-1 text-xs">
+                                <?= salesH($heading) ?>
+                            </span>
+
+                        <?php endforeach; ?>
+
+                    </div>
+
+                    <p class="mt-2 text-xs">
+                        The column headings can be on any of the first
+                        20 rows. Blank rows are skipped. The description
+                        column is required.
+                    </p>
+                </div>
+
+                <button type="submit"
+                        class="bg-green-700 hover:bg-green-800 text-white
+                               px-5 py-2.5 rounded-lg font-semibold">
+                    Import Excel Report
+                </button>
+
+            </form>
+        </div>
+
+        <!-- Manual entry form -->
         <div class="sales-card p-5 mb-8">
 
             <div class="flex items-center justify-between flex-wrap
                         gap-3 mb-5">
+
                 <h2 class="text-lg font-bold">
                     <?= $mode === 'edit'
                         ? 'Edit Daily Sales Report'
@@ -859,6 +1415,7 @@ if ($staffName === '') {
                         Report #<?= (int) $selectedReport['report_id'] ?>
                     </span>
                 <?php endif; ?>
+
             </div>
 
             <form method="POST"
@@ -876,8 +1433,12 @@ if ($staffName === '') {
                        value="<?= (int) ($selectedReport['report_id'] ?? 0) ?>">
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+
                     <div>
-                        <label class="sales-label">Reporting Date *</label>
+                        <label class="sales-label">
+                            Reporting Date *
+                        </label>
+
                         <input type="date"
                                name="report_date"
                                class="sales-input"
@@ -887,20 +1448,28 @@ if ($staffName === '') {
                     </div>
 
                     <div>
-                        <label class="sales-label">Staff Member</label>
+                        <label class="sales-label">
+                            Staff Member
+                        </label>
+
                         <input type="text"
                                class="sales-input bg-gray-100"
                                value="<?= salesH($staffName) ?>"
                                readonly>
+
                         <p class="text-xs text-gray-500 mt-1">
                             This report is linked to your employee account.
                         </p>
                     </div>
+
                 </div>
 
                 <div class="flex flex-col sm:flex-row sm:items-center
                             justify-between gap-3 mb-4">
-                    <h3 class="font-bold text-gray-800">Sales Activities</h3>
+
+                    <h3 class="font-bold text-gray-800">
+                        Sales Activities
+                    </h3>
 
                     <button type="button"
                             id="addActivityBtn"
@@ -909,9 +1478,11 @@ if ($staffName === '') {
                                    font-semibold">
                         + Add Activity
                     </button>
+
                 </div>
 
                 <div id="activitiesContainer" class="space-y-4">
+
                     <?php
                     $formActivities = $selectedActivities ?: [[
                         'description' => '',
@@ -923,9 +1494,11 @@ if ($staffName === '') {
                     ?>
 
                     <?php foreach ($formActivities as $index => $activity): ?>
+
                         <div class="activity-card activity-row">
 
                             <div class="flex justify-between items-center mb-4">
+
                                 <h4 class="font-semibold activity-heading">
                                     Activity <?= $index + 1 ?>
                                 </h4>
@@ -936,19 +1509,22 @@ if ($staffName === '') {
                                                font-semibold">
                                     Remove
                                 </button>
+
                             </div>
 
                             <div class="grid grid-cols-1 md:grid-cols-2
                                         gap-4 mb-4">
+
                                 <div>
                                     <label class="sales-label">
                                         Sales Activity Description *
                                     </label>
+
                                     <textarea name="description[]"
                                               rows="3"
                                               class="sales-input"
                                               required
-                                              placeholder="For example, contacted customers, prepared quotations, followed up leads or closed sales..."><?= salesH(
+                                              placeholder="Describe the sales activity..."><?= salesH(
                                                   $activity['description']
                                               ) ?></textarea>
                                 </div>
@@ -957,10 +1533,11 @@ if ($staffName === '') {
                                     <label class="sales-label">
                                         Indicators of Performance
                                     </label>
+
                                     <textarea name="performance_indicators[]"
                                               rows="3"
                                               class="sales-input"
-                                              placeholder="For example, sales target, number of calls, customer visits, quotations or leads..."><?= salesH(
+                                              placeholder="Sales targets, customer visits, quotations or leads..."><?= salesH(
                                                   $activity['performance_indicators'] ?? ''
                                               ) ?></textarea>
                                 </div>
@@ -969,60 +1546,99 @@ if ($staffName === '') {
                                     <label class="sales-label">
                                         Outcome / Results
                                     </label>
+
                                     <textarea name="outcome[]"
                                               rows="3"
                                               class="sales-input"
-                                              placeholder="For example, sales made, orders received, quotations sent, customers gained or follow-ups completed..."><?= salesH(
+                                              placeholder="Sales made, orders received or follow-ups completed..."><?= salesH(
                                                   $activity['outcome'] ?? ''
                                               ) ?></textarea>
                                 </div>
 
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
                                     <div>
                                         <label class="sales-label">
                                             Routine / Planned *
                                         </label>
+
                                         <select name="activity_type[]"
                                                 class="sales-input"
                                                 required>
+
                                             <?php foreach ($activityTypes as $type): ?>
+
                                                 <option
                                                     value="<?= salesH($type) ?>"
                                                     <?= ($activity['activity_type'] ?? 'Routine') === $type
                                                         ? 'selected' : '' ?>>
+
                                                     <?= salesH($type) ?>
+
                                                 </option>
+
                                             <?php endforeach; ?>
+
                                         </select>
                                     </div>
 
                                     <div>
-                                        <label class="sales-label">Status *</label>
+                                        <label class="sales-label">
+                                            Status *
+                                        </label>
+
                                         <select name="activity_status[]"
                                                 class="sales-input"
                                                 required>
-                                            <?php foreach ($statuses as $status): ?>
+
+                                            <?php
+                                            $currentStatus = trim(
+                                                (string) (
+                                                    $activity['status'] ?? 'Pending'
+                                                )
+                                            );
+
+                                            $displayStatuses = array_unique(
+                                                array_merge(
+                                                    $statuses,
+                                                    [$currentStatus]
+                                                )
+                                            );
+                                            ?>
+
+                                            <?php foreach ($displayStatuses as $status): ?>
+
                                                 <option
                                                     value="<?= salesH($status) ?>"
-                                                    <?= ($activity['status'] ?? 'Pending') === $status
+                                                    <?= $currentStatus === $status
                                                         ? 'selected' : '' ?>>
+
                                                     <?= salesH($status) ?>
+
                                                 </option>
+
                                             <?php endforeach; ?>
+
                                         </select>
                                     </div>
+
                                 </div>
                             </div>
                         </div>
+
                     <?php endforeach; ?>
+
                 </div>
 
                 <div class="flex flex-wrap gap-3 mt-6 pt-5 border-t">
+
                     <button type="submit"
                             class="btn-gold px-6 py-2.5 rounded-lg font-semibold">
+
                         <?= $mode === 'edit'
                             ? 'Update Sales Report'
                             : 'Save Sales Report' ?>
+
                     </button>
 
                     <a href="sales_daily_report.php"
@@ -1030,28 +1646,37 @@ if ($staffName === '') {
                               rounded-lg hover:bg-gray-50">
                         Cancel
                     </a>
+
                 </div>
+
             </form>
         </div>
+
     <?php endif; ?>
 
     <!-- View selected report -->
     <?php if ($mode === 'view' && $selectedReport): ?>
+
         <div class="sales-card p-5 mb-8">
 
             <div class="flex flex-col sm:flex-row sm:items-start
                         sm:justify-between gap-4 mb-5">
+
                 <div>
                     <h2 class="text-xl font-bold">
                         Sales Report Details
                     </h2>
+
                     <p class="text-sm text-gray-500 mt-1">
                         Reporting date:
-                        <strong><?= salesH($selectedReport['report_date']) ?></strong>
+                        <strong>
+                            <?= salesH($selectedReport['report_date']) ?>
+                        </strong>
                     </p>
                 </div>
 
                 <div class="flex flex-wrap gap-2">
+
                     <a href="sales_daily_report.php?mode=edit&amp;report_id=<?= (int) $selectedReport['report_id'] ?>"
                        class="bg-blue-600 hover:bg-blue-700 text-white
                               px-4 py-2 rounded-lg">
@@ -1063,21 +1688,26 @@ if ($staffName === '') {
                               px-4 py-2 rounded-lg">
                         Download Excel
                     </a>
+
                 </div>
             </div>
 
             <p class="text-sm mb-4">
                 Staff member:
-                <strong><?= salesH(
-                    trim(
-                        $selectedReport['first_name'] . ' ' .
-                        $selectedReport['last_name']
-                    )
-                ) ?></strong>
+                <strong>
+                    <?= salesH(
+                        trim(
+                            $selectedReport['first_name'] . ' ' .
+                            $selectedReport['last_name']
+                        )
+                    ) ?>
+                </strong>
             </p>
 
             <div class="overflow-x-auto">
+
                 <table class="min-w-full text-sm border-collapse">
+
                     <thead class="bg-gray-100">
                         <tr>
                             <th class="border p-3 text-left">#</th>
@@ -1094,41 +1724,57 @@ if ($staffName === '') {
                     </thead>
 
                     <tbody>
+
                         <?php if (!$selectedActivities): ?>
+
                             <tr>
                                 <td colspan="6"
                                     class="border p-4 text-center text-gray-500">
                                     No sales activities found.
                                 </td>
                             </tr>
+
                         <?php else: ?>
+
                             <?php foreach ($selectedActivities as $index => $activity): ?>
+
                                 <tr class="hover:bg-gray-50 align-top">
+
                                     <td class="border p-3">
                                         <?= $index + 1 ?>
                                     </td>
+
                                     <td class="border p-3 whitespace-pre-wrap"><?= salesH(
                                         $activity['description']
                                     ) ?></td>
+
                                     <td class="border p-3 whitespace-pre-wrap"><?= salesH(
                                         $activity['performance_indicators']
                                     ) ?></td>
+
                                     <td class="border p-3 whitespace-pre-wrap"><?= salesH(
                                         $activity['outcome']
                                     ) ?></td>
+
                                     <td class="border p-3">
                                         <?= salesH($activity['activity_type']) ?>
                                     </td>
+
                                     <td class="border p-3">
                                         <?= salesH($activity['status']) ?>
                                     </td>
+
                                 </tr>
+
                             <?php endforeach; ?>
+
                         <?php endif; ?>
+
                     </tbody>
                 </table>
             </div>
         </div>
+
     <?php endif; ?>
 
     <!-- Report history -->
@@ -1136,8 +1782,12 @@ if ($staffName === '') {
 
         <div class="flex flex-col sm:flex-row sm:items-center
                     sm:justify-between gap-3 mb-5">
+
             <div>
-                <h2 class="text-lg font-bold">My Sales Daily Reports</h2>
+                <h2 class="text-lg font-bold">
+                    My Sales Daily Reports
+                </h2>
+
                 <p class="text-sm text-gray-500 mt-1">
                     View, edit and export your daily sales reports.
                 </p>
@@ -1147,10 +1797,13 @@ if ($staffName === '') {
                    id="reportSearch"
                    class="sales-input sm:max-w-xs"
                    placeholder="Search reports by date or status...">
+
         </div>
 
         <div class="overflow-x-auto">
+
             <table class="min-w-full text-sm border-collapse">
+
                 <thead class="bg-gray-100">
                     <tr>
                         <th class="border p-3 text-left">Reporting Date</th>
@@ -1164,16 +1817,22 @@ if ($staffName === '') {
                 </thead>
 
                 <tbody id="reportsTableBody">
+
                     <?php if (!$reports): ?>
+
                         <tr>
                             <td colspan="7"
                                 class="border p-6 text-center text-gray-500">
                                 No sales daily reports have been recorded yet.
                             </td>
                         </tr>
+
                     <?php else: ?>
+
                         <?php foreach ($reports as $report): ?>
+
                             <tr class="report-row hover:bg-gray-50">
+
                                 <td class="border p-3 font-medium">
                                     <?= salesH($report['report_date']) ?>
                                 </td>
@@ -1199,7 +1858,9 @@ if ($staffName === '') {
                                 </td>
 
                                 <td class="border p-3">
+
                                     <div class="flex flex-wrap justify-center gap-2">
+
                                         <a href="sales_daily_report.php?mode=view&amp;report_id=<?= (int) $report['report_id'] ?>"
                                            class="text-blue-700 hover:underline font-semibold">
                                             View
@@ -1214,11 +1875,16 @@ if ($staffName === '') {
                                            class="text-green-700 hover:underline font-semibold">
                                             Excel
                                         </a>
+
                                     </div>
+
                                 </td>
                             </tr>
+
                         <?php endforeach; ?>
+
                     <?php endif; ?>
+
                 </tbody>
             </table>
         </div>
@@ -1252,10 +1918,12 @@ if ($staffName === '') {
 
             if (removeButton) {
                 removeButton.disabled = rows.length === 1;
+
                 removeButton.classList.toggle(
                     'opacity-40',
                     rows.length === 1
                 );
+
                 removeButton.classList.toggle(
                     'cursor-not-allowed',
                     rows.length === 1
@@ -1265,6 +1933,7 @@ if ($staffName === '') {
 
         if (addButton) {
             addButton.disabled = rows.length >= maxActivities;
+
             addButton.classList.toggle(
                 'opacity-40',
                 rows.length >= maxActivities
@@ -1274,11 +1943,13 @@ if ($staffName === '') {
 
     function createActivityRow() {
         const row = document.createElement('div');
+
         row.className = 'activity-card activity-row';
 
         row.innerHTML = `
             <div class="flex justify-between items-center mb-4">
                 <h4 class="font-semibold activity-heading">Activity</h4>
+
                 <button type="button"
                     class="remove-activity text-red-600 hover:text-red-800
                            text-sm font-semibold">
@@ -1287,10 +1958,12 @@ if ($staffName === '') {
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+
                 <div>
                     <label class="sales-label">
                         Sales Activity Description *
                     </label>
+
                     <textarea name="description[]" rows="3"
                         class="sales-input" required
                         placeholder="Describe the sales activity..."></textarea>
@@ -1300,23 +1973,29 @@ if ($staffName === '') {
                     <label class="sales-label">
                         Indicators of Performance
                     </label>
+
                     <textarea name="performance_indicators[]" rows="3"
                         class="sales-input"
                         placeholder="Sales targets, customer visits, quotations or leads..."></textarea>
                 </div>
 
                 <div>
-                    <label class="sales-label">Outcome / Results</label>
+                    <label class="sales-label">
+                        Outcome / Results
+                    </label>
+
                     <textarea name="outcome[]" rows="3"
                         class="sales-input"
-                        placeholder="Sales made, orders received, customers gained or follow-ups completed..."></textarea>
+                        placeholder="Sales made, orders received or follow-ups completed..."></textarea>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
                     <div>
                         <label class="sales-label">
                             Routine / Planned *
                         </label>
+
                         <select name="activity_type[]"
                             class="sales-input" required>
                             <option value="Routine">Routine</option>
@@ -1326,6 +2005,7 @@ if ($staffName === '') {
 
                     <div>
                         <label class="sales-label">Status *</label>
+
                         <select name="activity_status[]"
                             class="sales-input" required>
                             <option value="Pending">Pending</option>
@@ -1335,6 +2015,7 @@ if ($staffName === '') {
                             <option value="Cancelled">Cancelled</option>
                         </select>
                     </div>
+
                 </div>
             </div>
         `;
@@ -1356,11 +2037,14 @@ if ($staffName === '') {
             updateActivityRows();
 
             const newRow = container.lastElementChild;
+
             const description = newRow.querySelector(
                 '[name="description[]"]'
             );
 
-            if (description) description.focus();
+            if (description) {
+                description.focus();
+            }
         });
     }
 
@@ -1379,6 +2063,7 @@ if ($staffName === '') {
             if (rows.length <= 1) return;
 
             removeButton.closest('.activity-row').remove();
+
             updateActivityRows();
         });
 
@@ -1409,12 +2094,14 @@ if ($staffName === '') {
 
             if (missingDescription) {
                 event.preventDefault();
-                alert('Please enter a description for every sales activity.');
+
+                alert(
+                    'Please enter a description for every sales activity.'
+                );
             }
         });
     }
 
-    // Search the report history table.
     const searchInput = document.getElementById('reportSearch');
 
     if (searchInput) {
@@ -1423,7 +2110,9 @@ if ($staffName === '') {
 
             document.querySelectorAll('.report-row').forEach(function (row) {
                 row.style.display =
-                    row.textContent.toLowerCase().includes(query) ? '' : 'none';
+                    row.textContent.toLowerCase().includes(query)
+                        ? ''
+                        : 'none';
             });
         });
     }

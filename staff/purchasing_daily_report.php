@@ -1,10 +1,16 @@
-
 <?php
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
 require_once 'db_con.php';
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 $conn->set_charset("utf8mb4");
@@ -17,13 +23,6 @@ if (empty($_SESSION['user_id'])) {
 
 $userId = (int) $_SESSION['user_id'];
 
-/*
-|--------------------------------------------------------------------------
-| CSRF token
-|--------------------------------------------------------------------------
-| Keep the token in the session. Do not generate a new token on every
-| page request, because that invalidates forms already displayed.
-*/
 if (
     !isset($_SESSION['purchasing_report_csrf']) ||
     !is_string($_SESSION['purchasing_report_csrf']) ||
@@ -105,6 +104,7 @@ function purchasingGetEmployeeId(mysqli $conn, int $userId): int
 
         $stmt->bind_param("i", $userId);
         $stmt->execute();
+
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
@@ -134,6 +134,7 @@ function purchasingGetEmployeeId(mysqli $conn, int $userId): int
 
         $stmt->bind_param("i", $userId);
         $stmt->execute();
+
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
@@ -159,18 +160,20 @@ function purchasingValidDate(string $date): bool
     return $parsed !== false && $parsed->format('Y-m-d') === $date;
 }
 
-function purchasingRedirect(string $message, string $type = 'success'): void
-{
+function purchasingRedirect(
+    string $message,
+    string $type = 'success',
+    string $url = 'purchasing_daily_report.php'
+): void {
     $key = $type === 'error'
         ? 'purchasing_report_error'
         : 'purchasing_report_success';
 
     $_SESSION[$key] = $message;
 
-    header("Location: purchasing_daily_report.php");
+    header("Location: " . $url);
     exit;
 }
-
 function purchasingGetOwnedReport(
     mysqli $conn,
     int $reportId,
@@ -255,6 +258,238 @@ function purchasingExcelCell(string $value): string
 
 /*
 |--------------------------------------------------------------------------
+| Excel import helper functions
+|--------------------------------------------------------------------------
+*/
+
+function purchasingNormalizeHeading(string $heading): string
+{
+    $heading = strtoupper(trim($heading));
+
+    // Correct common spelling mistakes.
+    $heading = str_replace('PERFOMANCE', 'PERFORMANCE', $heading);
+
+    // Remove spaces, underscores and hyphens for consistent matching.
+    $heading = preg_replace('/[\s_\-]+/', '', $heading);
+
+    // Normalize punctuation.
+    $heading = str_replace(['\\', ':', '.'], '', $heading);
+
+    return $heading;
+}
+
+function purchasingReadExcelActivities(string $filePath): array
+{
+    $spreadsheet = IOFactory::load($filePath);
+    $sheet = $spreadsheet->getActiveSheet();
+
+    $highestRow = $sheet->getHighestDataRow();
+    $highestColumn = $sheet->getHighestDataColumn();
+
+    $highestColumnIndex = Coordinate::columnIndexFromString(
+        $highestColumn
+    );
+
+    $headingAliases = [
+        'DESCRIPTION' => [
+            'DESCRIPTION',
+            'ACTIVITYDESCRIPTION',
+            'ACTIVITIES',
+            'TASKDESCRIPTION'
+        ],
+
+        'INDICATORS OF PERFORMANCE' => [
+            'INDICATORSOFPERFORMANCE',
+            'PERFORMANCEINDICATORS',
+            'INDICATOROFPERFORMANCE',
+            'INDICATORS',
+            'KPI',
+            'KPIS'
+        ],
+
+        'OUTCOME' => [
+            'OUTCOME',
+            'EXPECTEDOUTCOME',
+            'ACTUALOUTCOME',
+            'RESULT',
+            'RESULTS'
+        ],
+
+        'ROUTINE/PLANNED' => [
+            'ROUTINEPLANNED',
+            'ROUTINE',
+            'PLANNED',
+            'ACTIVITYTYPE',
+            'TYPE'
+        ],
+
+        'STATUS' => [
+            'STATUS',
+            'ACTIVITYSTATUS',
+            'PROGRESSSTATUS'
+        ]
+    ];
+
+    $headingRow = null;
+    $columnMap = [];
+
+    // Locate the heading row within the first 20 rows.
+    for ($row = 1; $row <= min(20, $highestRow); $row++) {
+
+        $found = [];
+
+        for ($col = 1; $col <= $highestColumnIndex; $col++) {
+
+            $cell = $sheet->getCell(
+                Coordinate::stringFromColumnIndex($col) . $row
+            );
+
+            if ($cell->getDataType() === DataType::TYPE_FORMULA) {
+                continue;
+            }
+
+            $value = $cell->getValue();
+
+            if ($value instanceof \PhpOffice\PhpSpreadsheet\RichText\RichText) {
+                $value = $value->getPlainText();
+            }
+
+            $normalized = purchasingNormalizeHeading((string) $value);
+
+            if ($normalized === '') {
+                continue;
+            }
+
+            foreach ($headingAliases as $heading => $aliases) {
+
+                foreach ($aliases as $alias) {
+
+                    if (
+                        $normalized ===
+                        purchasingNormalizeHeading($alias)
+                    ) {
+                        $found[$heading] = $col;
+                        break 2;
+                    }
+                }
+            }
+        }
+
+        // Description is the only mandatory heading.
+        if (isset($found['DESCRIPTION'])) {
+            $headingRow = $row;
+            $columnMap = $found;
+            break;
+        }
+    }
+
+    if ($headingRow === null) {
+        throw new Exception(
+            "The Excel file must contain a DESCRIPTION heading."
+        );
+    }
+
+    $activities = [];
+
+    for ($row = $headingRow + 1; $row <= $highestRow; $row++) {
+
+        $values = [];
+
+        foreach ($headingAliases as $heading => $aliases) {
+
+            $values[$heading] = '';
+
+            // Missing optional columns are allowed.
+            if (!isset($columnMap[$heading])) {
+                continue;
+            }
+
+            $cell = $sheet->getCell(
+                Coordinate::stringFromColumnIndex(
+                    $columnMap[$heading]
+                ) . $row
+            );
+
+            if ($cell->getDataType() === DataType::TYPE_FORMULA) {
+                throw new Exception(
+                    "Formula detected in Excel row {$row}. "
+                    . "Please replace formulas with normal text."
+                );
+            }
+
+            $value = $cell->getValue();
+
+            if ($value instanceof \PhpOffice\PhpSpreadsheet\RichText\RichText) {
+                $value = $value->getPlainText();
+            }
+
+            $values[$heading] = trim((string) ($value ?? ''));
+        }
+
+        // Ignore completely empty rows.
+        if (implode('', $values) === '') {
+            continue;
+        }
+
+        if ($values['DESCRIPTION'] === '') {
+            throw new Exception(
+                "Description is missing in Excel row {$row}."
+            );
+        }
+
+        // Activity type.
+        $typeValue = strtolower(
+            trim($values['ROUTINE/PLANNED'])
+        );
+
+        $type = ($typeValue === 'planned')
+            ? 'Planned'
+            : 'Routine';
+
+        if (
+            $typeValue !== '' &&
+            !in_array($typeValue, ['routine', 'planned'], true)
+        ) {
+            throw new Exception(
+                "Invalid Routine/Planned value in Excel row {$row}. "
+                . "Use Routine or Planned."
+            );
+        }
+
+        // Accept the status exactly as entered in Excel.
+        $status = trim($values['STATUS']);
+
+        if ($status === '') {
+            $status = 'Pending';
+        }
+
+        $activities[] = [
+            'description' => $values['DESCRIPTION'],
+            'performance_indicators' =>
+                $values['INDICATORS OF PERFORMANCE'],
+            'outcome' => $values['OUTCOME'],
+            'activity_type' => $type,
+            'status' => $status
+        ];
+
+        if (count($activities) > 100) {
+            throw new Exception(
+                "The Excel file contains more than 100 activities. "
+                . "Please import a maximum of 100 activities at a time."
+            );
+        }
+    }
+
+    if (empty($activities)) {
+        throw new Exception(
+            "No activities were found in the Excel file."
+        );
+    }
+
+    return $activities;
+}
+/*
+|--------------------------------------------------------------------------
 | Resolve logged-in employee
 |--------------------------------------------------------------------------
 */
@@ -265,6 +500,7 @@ try {
     error_log("Purchasing report employee lookup: " . $e->getMessage());
 
     http_response_code(403);
+
     exit(
         "Your login account could not be linked to an employee record. "
         . "Please contact the administrator to check the users/employees "
@@ -282,11 +518,67 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 /*
 |--------------------------------------------------------------------------
+| Download Excel import template
+|--------------------------------------------------------------------------
+*/
+
+if ($action === 'template') {
+
+    $spreadsheet = new Spreadsheet();
+    $sheet = $spreadsheet->getActiveSheet();
+
+    $sheet->setTitle('Purchasing Activities');
+
+    $headers = [
+        'DESCRIPTION',
+        'INDICATORS OF PERFORMANCE',
+        'OUTCOME',
+        'ROUTINE/PLANNED',
+        'STATUS'
+    ];
+
+    $sheet->fromArray($headers, null, 'A1');
+
+    $sheet->getStyle('A1:E1')->getFont()->setBold(true);
+
+    $sheet->getStyle('A1:E1')
+        ->getFill()
+        ->setFillType(
+            \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID
+        )
+        ->getStartColor()
+        ->setRGB('D9E8D5');
+
+    foreach (range('A', 'E') as $column) {
+        $sheet->getColumnDimension($column)->setAutoSize(true);
+    }
+
+    $filename = 'Purchasing_Daily_Report_Template.xlsx';
+
+    header(
+        'Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+
+    header(
+        'Content-Disposition: attachment; filename="' . $filename . '"'
+    );
+
+    header('Cache-Control: max-age=0');
+
+    $writer = new Xlsx($spreadsheet);
+    $writer->save('php://output');
+
+    exit;
+}
+
+/*
+|--------------------------------------------------------------------------
 | Export report to Excel
 |--------------------------------------------------------------------------
 */
 
 if ($action === 'export') {
+
     $reportId = filter_var(
         $_GET['report_id'] ?? '',
         FILTER_VALIDATE_INT
@@ -314,9 +606,11 @@ if ($action === 'export') {
         $report['report_date'] . '.xls';
 
     header("Content-Type: application/vnd.ms-excel; charset=UTF-8");
+
     header(
         'Content-Disposition: attachment; filename="' . $filename . '"'
     );
+
     header("Cache-Control: no-store, no-cache, must-revalidate");
     header("Pragma: no-cache");
 
@@ -331,15 +625,18 @@ if ($action === 'export') {
                 border-collapse: collapse;
                 width: 100%;
             }
+
             th, td {
                 border: 1px solid #555;
                 padding: 8px;
                 vertical-align: top;
             }
+
             th {
                 background: #d9e8d5;
                 font-weight: bold;
             }
+
             .heading {
                 font-size: 16px;
                 font-weight: bold;
@@ -353,12 +650,14 @@ if ($action === 'export') {
                     LYNNTECH MANAGER - PURCHASING DAILY REPORT
                 </td>
             </tr>
+
             <tr>
                 <td colspan="2"><strong>Reporting Date</strong></td>
                 <td colspan="4">
                     <?= purchasingExcelCell($report['report_date']) ?>
                 </td>
             </tr>
+
             <tr>
                 <td colspan="2"><strong>Staff Member</strong></td>
                 <td colspan="4">
@@ -367,6 +666,7 @@ if ($action === 'export') {
                     ) ?>
                 </td>
             </tr>
+
             <tr>
                 <th>No.</th>
                 <th>Description</th>
@@ -379,18 +679,23 @@ if ($action === 'export') {
             <?php foreach ($activities as $index => $activity): ?>
                 <tr>
                     <td><?= $index + 1 ?></td>
+
                     <td><?= nl2br(purchasingExcelCell(
                         $activity['description']
                     )) ?></td>
+
                     <td><?= nl2br(purchasingExcelCell(
                         $activity['performance_indicators'] ?? ''
                     )) ?></td>
+
                     <td><?= nl2br(purchasingExcelCell(
                         $activity['outcome'] ?? ''
                     )) ?></td>
+
                     <td><?= purchasingExcelCell(
                         $activity['activity_type']
                     ) ?></td>
+
                     <td><?= purchasingExcelCell(
                         $activity['status']
                     ) ?></td>
@@ -405,21 +710,137 @@ if ($action === 'export') {
 
 /*
 |--------------------------------------------------------------------------
-| Save a new report or update an existing report
+| Import activities from Excel
 |--------------------------------------------------------------------------
 */
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'import') {
+
     $submittedToken = $_POST['csrf_token'] ?? '';
 
     if (
         !is_string($submittedToken) ||
         !hash_equals($_SESSION['purchasing_report_csrf'], $submittedToken)
     ) {
-        /*
-         * Do not save a request with an invalid token.
-         * Redirecting displays a fresh form with the current session token.
-         */
+        purchasingRedirect(
+            "Your session token is invalid. Please reload the page and try again.",
+            'error'
+        );
+    }
+
+    $reportDate = trim((string) ($_POST['report_date'] ?? ''));
+
+    $reportIdValue = filter_var(
+        $_POST['report_id'] ?? '0',
+        FILTER_VALIDATE_INT
+    );
+
+    $reportId = ($reportIdValue && $reportIdValue > 0)
+        ? (int) $reportIdValue
+        : 0;
+
+    if (!purchasingValidDate($reportDate) || $reportDate > $today) {
+        purchasingRedirect(
+            "Please select a valid reporting date before importing.",
+            'error'
+        );
+    }
+
+    if ($reportId > 0) {
+
+        $ownedReport = purchasingGetOwnedReport(
+            $conn,
+            $reportId,
+            $employeeId
+        );
+
+        if (!$ownedReport) {
+            purchasingRedirect(
+                "Report not found or you do not have permission to edit it.",
+                'error'
+            );
+        }
+    }
+
+    if (
+        !isset($_FILES['excel_file']) ||
+        $_FILES['excel_file']['error'] !== UPLOAD_ERR_OK
+    ) {
+        purchasingRedirect(
+            "Please select a valid Excel file to import.",
+            'error'
+        );
+    }
+
+    $file = $_FILES['excel_file'];
+
+    if ($file['size'] > 5 * 1024 * 1024) {
+        purchasingRedirect(
+            "The Excel file must not exceed 5 MB.",
+            'error'
+        );
+    }
+
+    $extension = strtolower(
+        pathinfo($file['name'], PATHINFO_EXTENSION)
+    );
+
+    if (!in_array($extension, ['xlsx', 'xls'], true)) {
+        purchasingRedirect(
+            "Only Excel .xlsx and .xls files are supported.",
+            'error'
+        );
+    }
+
+    try {
+
+        $importedActivities = purchasingReadExcelActivities(
+            $file['tmp_name']
+        );
+
+        $_SESSION['purchasing_imported_activities'] = $importedActivities;
+        $_SESSION['purchasing_imported_date'] = $reportDate;
+        $_SESSION['purchasing_imported_report_id'] = $reportId;
+
+        $_SESSION['purchasing_report_success'] =
+            count($importedActivities)
+            . " activities imported successfully. Review them before saving.";
+
+        $redirectUrl = 'purchasing_daily_report.php';
+
+if ($reportId > 0) {
+    $redirectUrl .= '?mode=edit&report_id=' . $reportId;
+}
+        header("Location: " . $redirectUrl);
+        exit;
+
+    } catch (Throwable $e) {
+
+        error_log("Purchasing Excel import: " . $e->getMessage());
+
+        purchasingRedirect(
+            $e instanceof Exception
+                ? $e->getMessage()
+                : "Unable to read the Excel file. Please check its format.",
+            'error'
+        );
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Save a new report or update an existing report
+|--------------------------------------------------------------------------
+*/
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
+
+    $submittedToken = $_POST['csrf_token'] ?? '';
+
+    if (
+        !is_string($submittedToken) ||
+        !hash_equals($_SESSION['purchasing_report_csrf'], $submittedToken)
+    ) {
         purchasingRedirect(
             "Your session token is invalid. Please reload the page and try again.",
             'error'
@@ -484,6 +905,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
     $activities = [];
 
     for ($i = 0; $i < $rowCount; $i++) {
+
         if (
             !is_string($descriptions[$i]) ||
             !is_string($indicators[$i]) ||
@@ -531,10 +953,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
     $transactionStarted = false;
 
     try {
+
         $conn->begin_transaction();
         $transactionStarted = true;
 
         if ($isEditing) {
+
             $existingReport = purchasingGetOwnedReport(
                 $conn,
                 $reportId,
@@ -564,7 +988,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
             $stmt->execute();
             $stmt->close();
 
-            // Replace the previous activities with the submitted activities.
             $stmt = $conn->prepare("
                 DELETE FROM purchasing_daily_report_activities
                 WHERE report_id = ?
@@ -575,6 +998,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
             $stmt->close();
 
         } else {
+
             $stmt = $conn->prepare("
                 INSERT INTO purchasing_daily_reports
                     (employee_id, report_date)
@@ -602,6 +1026,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
         ");
 
         foreach ($activities as $activity) {
+
             $stmt->bind_param(
                 "isssss",
                 $reportId,
@@ -621,12 +1046,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save') {
         $transactionStarted = false;
 
         purchasingRedirect(
-            $isEditing
-                ? "Daily purchasing report updated successfully."
-                : "Daily purchasing report saved successfully."
-        );
-
+    $isEditing
+        ? "Daily purchasing report updated successfully."
+        : "Daily purchasing report saved successfully.",
+    'success',
+    'purchasing_daily_report.php?mode=edit&report_id=' . $reportId
+);
     } catch (Throwable $e) {
+
         if ($transactionStarted) {
             $conn->rollback();
         }
@@ -668,6 +1095,7 @@ $requestedReportId = filter_var(
 );
 
 if ($requestedReportId && $requestedReportId > 0) {
+
     $selectedReport = purchasingGetOwnedReport(
         $conn,
         (int) $requestedReportId,
@@ -691,6 +1119,12 @@ if ($requestedReportId && $requestedReportId > 0) {
     }
 }
 
+/*
+|--------------------------------------------------------------------------
+| Load session messages
+|--------------------------------------------------------------------------
+*/
+
 if (isset($_SESSION['purchasing_report_success'])) {
     $success = $_SESSION['purchasing_report_success'];
     unset($_SESSION['purchasing_report_success']);
@@ -701,7 +1135,52 @@ if (isset($_SESSION['purchasing_report_error'])) {
     unset($_SESSION['purchasing_report_error']);
 }
 
-$defaultDate = $selectedReport['report_date'] ?? $today;
+/*
+|--------------------------------------------------------------------------
+| Restore temporarily imported Excel activities
+|--------------------------------------------------------------------------
+*/
+
+$importedActivities = [];
+$importedDate = null;
+$importedReportId = 0;
+
+if (isset($_SESSION['purchasing_imported_activities'])) {
+
+    $importedActivities = $_SESSION['purchasing_imported_activities'];
+
+    $importedDate = $_SESSION['purchasing_imported_date'] ?? $today;
+
+    $importedReportId = (int) (
+        $_SESSION['purchasing_imported_report_id'] ?? 0
+    );
+
+    unset(
+        $_SESSION['purchasing_imported_activities'],
+        $_SESSION['purchasing_imported_date'],
+        $_SESSION['purchasing_imported_report_id']
+    );
+}
+
+$defaultDate = $importedDate ?? (
+    $selectedReport['report_date'] ?? $today
+);
+
+/*
+|--------------------------------------------------------------------------
+| Prepare activity rows for the form
+|--------------------------------------------------------------------------
+*/
+
+$formActivities = !empty($importedActivities)
+    ? $importedActivities
+    : ($selectedActivities ?: [[
+        'description' => '',
+        'performance_indicators' => '',
+        'outcome' => '',
+        'activity_type' => 'Routine',
+        'status' => 'Pending'
+    ]]);
 
 /*
 |--------------------------------------------------------------------------
@@ -832,10 +1311,12 @@ if ($staffName === '') {
 
     <div class="flex flex-col md:flex-row md:items-center
                 md:justify-between gap-4 mb-6">
+
         <div>
             <h1 class="text-2xl font-bold text-gray-900">
                 Purchasing Daily Report
             </h1>
+
             <p class="text-sm text-gray-500 mt-1">
                 Record, manage and export your daily purchasing activities.
             </p>
@@ -863,10 +1344,12 @@ if ($staffName === '') {
 
     <!-- New or edit report form -->
     <?php if ($mode !== 'view'): ?>
+
         <div class="purchasing-card p-5 mb-8">
 
             <div class="flex items-center justify-between flex-wrap
                         gap-3 mb-5">
+
                 <h2 class="text-lg font-bold">
                     <?= $mode === 'edit'
                         ? 'Edit Daily Purchasing Report'
@@ -878,8 +1361,105 @@ if ($staffName === '') {
                         Report #<?= (int) $selectedReport['report_id'] ?>
                     </span>
                 <?php endif; ?>
+
+            </div>
+<!-- EXCEL IMPORT SECTION -->
+<div class="mb-6 p-5 rounded-xl border-2 border-dashed border-green-300
+            bg-green-50">
+
+    <div class="flex flex-col md:flex-row md:items-center
+                md:justify-between gap-3 mb-4">
+
+        <div>
+            <h3 class="text-lg font-bold text-green-900">
+                <i class="fas fa-file-excel mr-2"></i>
+                Import Activities from Excel
+            </h3>
+
+            <p class="text-sm text-gray-600 mt-1">
+                Upload an Excel file to automatically populate your
+                purchasing activities.
+            </p>
+        </div>
+
+        <a href="purchasing_daily_report.php?action=template"
+           class="inline-flex items-center justify-center gap-2
+                  bg-green-700 hover:bg-green-800 text-white
+                  px-4 py-2 rounded-lg text-sm font-semibold">
+
+            <i class="fas fa-download"></i>
+            Download Excel Template
+
+        </a>
+
+    </div>
+
+    <form method="POST"
+          action="purchasing_daily_report.php"
+          enctype="multipart/form-data"
+          class="space-y-4">
+
+        <input type="hidden" name="action" value="import">
+
+        <input type="hidden"
+               name="csrf_token"
+               value="<?= purchasingH($csrfToken) ?>">
+
+        <input type="hidden"
+               name="report_id"
+               value="<?= (int) ($selectedReport['report_id'] ?? 0) ?>">
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            <div>
+                <label class="purchasing-label">
+                    Reporting Date *
+                </label>
+
+                <input type="date"
+                       name="report_date"
+                       class="purchasing-input"
+                       value="<?= purchasingH($defaultDate) ?>"
+                       max="<?= purchasingH($today) ?>"
+                       required>
             </div>
 
+            <div>
+                <label class="purchasing-label">
+                    Select Excel File *
+                </label>
+
+                <input type="file"
+                       name="excel_file"
+                       accept=".xlsx,.xls"
+                       class="purchasing-input bg-white"
+                       required>
+            </div>
+
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+
+            <button type="submit"
+                    class="bg-green-700 hover:bg-green-800
+                           text-white px-6 py-2.5 rounded-lg
+                           font-semibold">
+
+                <i class="fas fa-upload mr-2"></i>
+                Import Excel Activities
+
+            </button>
+
+            <span class="text-xs text-gray-500">
+                Supported formats: XLSX and XLS. Maximum size: 5 MB.
+            </span>
+
+        </div>
+
+    </form>
+
+</div>
+<!-- END EXCEL IMPORT SECTION -->
             <form method="POST"
                   action="purchasing_daily_report.php"
                   id="purchasingReportForm">
@@ -895,6 +1475,7 @@ if ($staffName === '') {
                        value="<?= (int) ($selectedReport['report_id'] ?? 0) ?>">
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+
                     <div>
                         <label class="purchasing-label">
                             Reporting Date *
@@ -922,11 +1503,15 @@ if ($staffName === '') {
                             The report is linked to your employee account.
                         </p>
                     </div>
+
                 </div>
 
                 <div class="flex flex-col sm:flex-row sm:items-center
                             justify-between gap-3 mb-4">
-                    <h3 class="font-bold text-gray-800">Activities</h3>
+
+                    <h3 class="font-bold text-gray-800">
+                        Activities
+                    </h3>
 
                     <button type="button"
                             id="addActivityBtn"
@@ -935,23 +1520,17 @@ if ($staffName === '') {
                                    font-semibold">
                         + Add Activity
                     </button>
+
                 </div>
 
                 <div id="activitiesContainer" class="space-y-4">
-                    <?php
-                    $formActivities = $selectedActivities ?: [[
-                        'description' => '',
-                        'performance_indicators' => '',
-                        'outcome' => '',
-                        'activity_type' => 'Routine',
-                        'status' => 'Pending'
-                    ]];
-                    ?>
 
                     <?php foreach ($formActivities as $index => $activity): ?>
+
                         <div class="activity-card activity-row">
 
                             <div class="flex justify-between items-center mb-4">
+
                                 <h4 class="font-semibold activity-heading">
                                     Activity <?= $index + 1 ?>
                                 </h4>
@@ -962,6 +1541,7 @@ if ($staffName === '') {
                                                font-semibold">
                                     Remove
                                 </button>
+
                             </div>
 
                             <div class="grid grid-cols-1 md:grid-cols-2
@@ -1008,6 +1588,7 @@ if ($staffName === '') {
                                 </div>
 
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
                                     <div>
                                         <label class="purchasing-label">
                                             Routine / Planned *
@@ -1016,6 +1597,7 @@ if ($staffName === '') {
                                         <select name="activity_type[]"
                                                 class="purchasing-input"
                                                 required>
+
                                             <?php foreach ($activityTypes as $type): ?>
                                                 <option
                                                     value="<?= purchasingH($type) ?>"
@@ -1024,6 +1606,7 @@ if ($staffName === '') {
                                                     <?= purchasingH($type) ?>
                                                 </option>
                                             <?php endforeach; ?>
+
                                         </select>
                                     </div>
 
@@ -1035,6 +1618,7 @@ if ($staffName === '') {
                                         <select name="activity_status[]"
                                                 class="purchasing-input"
                                                 required>
+
                                             <?php foreach ($statuses as $status): ?>
                                                 <option
                                                     value="<?= purchasingH($status) ?>"
@@ -1043,15 +1627,21 @@ if ($staffName === '') {
                                                     <?= purchasingH($status) ?>
                                                 </option>
                                             <?php endforeach; ?>
+
                                         </select>
                                     </div>
+
                                 </div>
+
                             </div>
                         </div>
+
                     <?php endforeach; ?>
+
                 </div>
 
                 <div class="flex flex-wrap gap-3 mt-6 pt-5 border-t">
+
                     <button type="submit"
                             class="btn-gold px-6 py-2.5 rounded-lg font-semibold">
                         <?= $mode === 'edit'
@@ -1064,17 +1654,22 @@ if ($staffName === '') {
                               rounded-lg hover:bg-gray-50">
                         Cancel
                     </a>
+
                 </div>
+
             </form>
         </div>
+
     <?php endif; ?>
 
     <!-- View a selected report -->
     <?php if ($mode === 'view' && $selectedReport): ?>
+
         <div class="purchasing-card p-5 mb-8">
 
             <div class="flex flex-col sm:flex-row sm:items-start
                         sm:justify-between gap-4 mb-5">
+
                 <div>
                     <h2 class="text-xl font-bold">
                         Purchasing Report Details
@@ -1089,6 +1684,7 @@ if ($staffName === '') {
                 </div>
 
                 <div class="flex flex-wrap gap-2">
+
                     <a href="purchasing_daily_report.php?mode=edit&amp;report_id=<?= (int) $selectedReport['report_id'] ?>"
                        class="bg-blue-600 hover:bg-blue-700 text-white
                               px-4 py-2 rounded-lg">
@@ -1100,6 +1696,7 @@ if ($staffName === '') {
                               px-4 py-2 rounded-lg">
                         Download Excel
                     </a>
+
                 </div>
             </div>
 
@@ -1114,7 +1711,9 @@ if ($staffName === '') {
             </p>
 
             <div class="overflow-x-auto">
+
                 <table class="min-w-full text-sm border-collapse">
+
                     <thead class="bg-gray-100">
                         <tr>
                             <th class="border p-3 text-left">#</th>
@@ -1131,16 +1730,22 @@ if ($staffName === '') {
                     </thead>
 
                     <tbody>
+
                         <?php if (!$selectedActivities): ?>
+
                             <tr>
                                 <td colspan="6"
                                     class="border p-4 text-center text-gray-500">
                                     No activities found.
                                 </td>
                             </tr>
+
                         <?php else: ?>
+
                             <?php foreach ($selectedActivities as $index => $activity): ?>
+
                                 <tr class="hover:bg-gray-50 align-top">
+
                                     <td class="border p-3">
                                         <?= $index + 1 ?>
                                     </td>
@@ -1166,13 +1771,18 @@ if ($staffName === '') {
                                     <td class="border p-3">
                                         <?= purchasingH($activity['status']) ?>
                                     </td>
+
                                 </tr>
+
                             <?php endforeach; ?>
+
                         <?php endif; ?>
+
                     </tbody>
                 </table>
             </div>
         </div>
+
     <?php endif; ?>
 
     <!-- Report history -->
@@ -1180,8 +1790,12 @@ if ($staffName === '') {
 
         <div class="flex flex-col sm:flex-row sm:items-center
                     sm:justify-between gap-3 mb-5">
+
             <div>
-                <h2 class="text-lg font-bold">My Purchasing Daily Reports</h2>
+                <h2 class="text-lg font-bold">
+                    My Purchasing Daily Reports
+                </h2>
+
                 <p class="text-sm text-gray-500 mt-1">
                     Reports are grouped by date with activity summaries.
                 </p>
@@ -1191,10 +1805,13 @@ if ($staffName === '') {
                    id="reportSearch"
                    class="purchasing-input sm:max-w-xs"
                    placeholder="Search by date or status...">
+
         </div>
 
         <div class="overflow-x-auto">
+
             <table class="min-w-full text-sm border-collapse">
+
                 <thead class="bg-gray-100">
                     <tr>
                         <th class="border p-3 text-left">Reporting Date</th>
@@ -1208,16 +1825,22 @@ if ($staffName === '') {
                 </thead>
 
                 <tbody id="reportsTableBody">
+
                     <?php if (!$reports): ?>
+
                         <tr>
                             <td colspan="7"
                                 class="border p-6 text-center text-gray-500">
                                 No purchasing daily reports have been recorded yet.
                             </td>
                         </tr>
+
                     <?php else: ?>
+
                         <?php foreach ($reports as $report): ?>
+
                             <tr class="report-row hover:bg-gray-50">
+
                                 <td class="border p-3 font-medium">
                                     <?= purchasingH($report['report_date']) ?>
                                 </td>
@@ -1243,7 +1866,9 @@ if ($staffName === '') {
                                 </td>
 
                                 <td class="border p-3">
+
                                     <div class="flex flex-wrap justify-center gap-2">
+
                                         <a href="purchasing_daily_report.php?mode=view&amp;report_id=<?= (int) $report['report_id'] ?>"
                                            class="text-blue-700 hover:underline font-semibold">
                                             View
@@ -1258,11 +1883,16 @@ if ($staffName === '') {
                                            class="text-green-700 hover:underline font-semibold">
                                             Excel
                                         </a>
+
                                     </div>
                                 </td>
+
                             </tr>
+
                         <?php endforeach; ?>
+
                     <?php endif; ?>
+
                 </tbody>
             </table>
         </div>
@@ -1276,17 +1906,21 @@ if ($staffName === '') {
 
 <script>
 (function () {
+
     const container = document.getElementById('activitiesContainer');
     const addButton = document.getElementById('addActivityBtn');
     const form = document.getElementById('purchasingReportForm');
+
     const maxActivities = 100;
 
     function updateActivityRows() {
+
         if (!container) return;
 
         const rows = container.querySelectorAll('.activity-row');
 
         rows.forEach(function (row, index) {
+
             const heading = row.querySelector('.activity-heading');
             const removeButton = row.querySelector('.remove-activity');
 
@@ -1295,11 +1929,14 @@ if ($staffName === '') {
             }
 
             if (removeButton) {
+
                 removeButton.disabled = rows.length === 1;
+
                 removeButton.classList.toggle(
                     'opacity-40',
                     rows.length === 1
                 );
+
                 removeButton.classList.toggle(
                     'cursor-not-allowed',
                     rows.length === 1
@@ -1308,7 +1945,9 @@ if ($staffName === '') {
         });
 
         if (addButton) {
+
             addButton.disabled = rows.length >= maxActivities;
+
             addButton.classList.toggle(
                 'opacity-40',
                 rows.length >= maxActivities
@@ -1317,12 +1956,15 @@ if ($staffName === '') {
     }
 
     function createActivityRow() {
+
         const row = document.createElement('div');
+
         row.className = 'activity-card activity-row';
 
         row.innerHTML = `
             <div class="flex justify-between items-center mb-4">
                 <h4 class="font-semibold activity-heading">Activity</h4>
+
                 <button type="button"
                     class="remove-activity text-red-600 hover:text-red-800
                            text-sm font-semibold">
@@ -1331,8 +1973,10 @@ if ($staffName === '') {
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+
                 <div>
                     <label class="purchasing-label">Description *</label>
+
                     <textarea name="description[]" rows="3"
                         class="purchasing-input" required
                         placeholder="Describe the purchasing activity..."></textarea>
@@ -1342,6 +1986,7 @@ if ($staffName === '') {
                     <label class="purchasing-label">
                         Indicators of Performance
                     </label>
+
                     <textarea name="performance_indicators[]" rows="3"
                         class="purchasing-input"
                         placeholder="Purchase targets, quantities, KPIs or measures..."></textarea>
@@ -1349,34 +1994,43 @@ if ($staffName === '') {
 
                 <div>
                     <label class="purchasing-label">Outcome</label>
+
                     <textarea name="outcome[]" rows="3"
                         class="purchasing-input"
                         placeholder="Items procured, deliveries received, cost savings or results..."></textarea>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
                     <div>
                         <label class="purchasing-label">
                             Routine / Planned *
                         </label>
+
                         <select name="activity_type[]"
                             class="purchasing-input" required>
+
                             <option value="Routine">Routine</option>
                             <option value="Planned">Planned</option>
+
                         </select>
                     </div>
 
                     <div>
                         <label class="purchasing-label">Status *</label>
+
                         <select name="activity_status[]"
                             class="purchasing-input" required>
+
                             <option value="Pending">Pending</option>
                             <option value="In Progress">In Progress</option>
                             <option value="Completed">Completed</option>
                             <option value="On Hold">On Hold</option>
                             <option value="Cancelled">Cancelled</option>
+
                         </select>
                     </div>
+
                 </div>
             </div>
         `;
@@ -1385,7 +2039,9 @@ if ($staffName === '') {
     }
 
     if (addButton && container) {
+
         addButton.addEventListener('click', function () {
+
             if (
                 container.querySelectorAll('.activity-row').length >=
                 maxActivities
@@ -1395,9 +2051,11 @@ if ($staffName === '') {
             }
 
             container.appendChild(createActivityRow());
+
             updateActivityRows();
 
             const newRow = container.lastElementChild;
+
             const description = newRow.querySelector(
                 '[name="description[]"]'
             );
@@ -1409,7 +2067,9 @@ if ($staffName === '') {
     }
 
     if (container) {
+
         container.addEventListener('click', function (event) {
+
             const target = event.target;
 
             if (!(target instanceof Element)) return;
@@ -1423,6 +2083,7 @@ if ($staffName === '') {
             if (rows.length <= 1) return;
 
             removeButton.closest('.activity-row').remove();
+
             updateActivityRows();
         });
 
@@ -1430,7 +2091,9 @@ if ($staffName === '') {
     }
 
     if (form && container) {
+
         form.addEventListener('submit', function (event) {
+
             const rows = container.querySelectorAll('.activity-row');
 
             if (rows.length < 1) {
@@ -1442,6 +2105,7 @@ if ($staffName === '') {
             let missingDescription = false;
 
             rows.forEach(function (row) {
+
                 const description = row.querySelector(
                     '[name="description[]"]'
                 );
@@ -1462,15 +2126,20 @@ if ($staffName === '') {
     const searchInput = document.getElementById('reportSearch');
 
     if (searchInput) {
+
         searchInput.addEventListener('input', function () {
+
             const query = searchInput.value.toLowerCase().trim();
 
             document.querySelectorAll('.report-row').forEach(function (row) {
+
                 const text = row.textContent.toLowerCase();
+
                 row.style.display = text.includes(query) ? '' : 'none';
             });
         });
     }
+
 })();
 </script>
 

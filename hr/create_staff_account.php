@@ -60,7 +60,90 @@ try {
 } catch (Throwable $e) {
     $error = "Could not load employees: " . $e->getMessage();
 }
+// --------------------------------------------------
+// HANDLE STAFF PASSWORD RESET
+// --------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && isset($_POST['reset_password'])) {
 
+    $user_id = filter_var(
+        $_POST['reset_user_id'] ?? '',
+        FILTER_VALIDATE_INT
+    );
+
+    $password = $_POST['reset_new_password'] ?? '';
+    $confirm_password = $_POST['reset_confirm_password'] ?? '';
+
+    if (!$user_id || $user_id < 1) {
+        $error = "Invalid staff account selected.";
+    } elseif ($password === '' || $confirm_password === '') {
+        $error = "Please enter and confirm the new password.";
+    } elseif ($password !== $confirm_password) {
+        $error = "Passwords do not match.";
+    } elseif (strlen($password) < 8) {
+        $error = "Password must be at least 8 characters long.";
+    } else {
+        try {
+            $hashedPassword = password_hash(
+                $password,
+                PASSWORD_DEFAULT
+            );
+
+            if ($hashedPassword === false) {
+                throw new Exception("Could not secure the password.");
+            }
+
+            if ($use_pdo) {
+                $stmt = $pdo->prepare("
+                    UPDATE users
+                    SET password = ?
+                    WHERE user_id = ?
+                      AND group_id = 9
+                ");
+
+                $stmt->execute([$hashedPassword, $user_id]);
+
+                if ($stmt->rowCount() < 1) {
+                    throw new Exception(
+                        "Staff account not found or password could not be updated."
+                    );
+                }
+
+            } else {
+                $stmt = $conn->prepare("
+                    UPDATE users
+                    SET password = ?
+                    WHERE user_id = ?
+                      AND group_id = 9
+                ");
+
+                $stmt->bind_param(
+                    "si",
+                    $hashedPassword,
+                    $user_id
+                );
+
+                $stmt->execute();
+
+                if ($stmt->affected_rows < 1) {
+                    $stmt->close();
+
+                    throw new Exception(
+                        "Staff account not found or password could not be updated."
+                    );
+                }
+
+                $stmt->close();
+            }
+
+            $success = "Staff password reset successfully.";
+            $_POST = [];
+
+        } catch (Throwable $e) {
+            $error = "Could not reset password: " . $e->getMessage();
+        }
+    }
+}
 
 // --------------------------------------------------
 // HANDLE USER STATUS UPDATE
@@ -643,6 +726,37 @@ try {
                                         <i class="fa-solid fa-pen mr-1"></i>
                                         Edit Status
                                     </button>
+                                    <button type="button"
+        class="bg-blue-100 hover:bg-blue-200
+               text-blue-800 px-3 py-2 rounded-lg ml-1"
+        onclick="openResetPasswordModal(
+            <?= (int)$user['user_id'] ?>,
+            <?= htmlspecialchars(
+                json_encode(
+                    $user['full_name'] ?? '',
+                    JSON_HEX_APOS |
+                    JSON_HEX_QUOT |
+                    JSON_HEX_TAG |
+                    JSON_HEX_AMP
+                ),
+                ENT_QUOTES,
+                'UTF-8'
+            ) ?>,
+            <?= htmlspecialchars(
+                json_encode(
+                    $user['email'] ?? '',
+                    JSON_HEX_APOS |
+                    JSON_HEX_QUOT |
+                    JSON_HEX_TAG |
+                    JSON_HEX_AMP
+                ),
+                ENT_QUOTES,
+                'UTF-8'
+            ) ?>
+        )">
+    <i class="fa-solid fa-key mr-1"></i>
+    Reset Password
+</button>
                                 </td>
 
                             </tr>
@@ -711,7 +825,106 @@ try {
 
     </div>
 </div>
+<!-- RESET PASSWORD MODAL -->
+<div id="resetPasswordModal"
+     class="fixed inset-0 bg-slate-900/50 hidden items-center
+            justify-center p-4 z-[1300]">
 
+    <div class="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md">
+
+        <div class="flex items-center gap-3 mb-5">
+            <div class="w-11 h-11 rounded-xl bg-blue-100
+                        text-blue-700 flex items-center justify-center">
+                <i class="fa-solid fa-key text-lg"></i>
+            </div>
+
+            <div>
+                <h2 class="text-xl font-bold text-slate-800">
+                    Reset Staff Password
+                </h2>
+                <p class="text-sm text-slate-500">
+                    Set a new login password.
+                </p>
+            </div>
+        </div>
+
+        <form method="POST" id="resetPasswordForm">
+
+            <input type="hidden"
+                   name="reset_user_id"
+                   id="resetUserId">
+
+            <div class="bg-slate-50 rounded-xl p-4 mb-5">
+                <p class="text-sm text-slate-500">Staff member</p>
+
+                <p id="resetUserName"
+                   class="font-semibold text-slate-800"></p>
+
+                <p id="resetUserEmail"
+                   class="text-sm text-slate-500"></p>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-semibold
+                              text-slate-700 mb-2">
+                    New Password
+                </label>
+
+                <input type="password"
+                       name="reset_new_password"
+                       id="resetNewPassword"
+                       minlength="8"
+                       autocomplete="new-password"
+                       required
+                       class="w-full border border-slate-300 rounded-xl
+                              p-3 focus:ring-2 focus:ring-blue-500"
+                       placeholder="Enter new password">
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-semibold
+                              text-slate-700 mb-2">
+                    Confirm New Password
+                </label>
+
+                <input type="password"
+                       name="reset_confirm_password"
+                       id="resetConfirmPassword"
+                       minlength="8"
+                       autocomplete="new-password"
+                       required
+                       class="w-full border border-slate-300 rounded-xl
+                              p-3 focus:ring-2 focus:ring-blue-500"
+                       placeholder="Confirm new password">
+
+                <p id="resetPasswordMessage"
+                   class="text-sm mt-2"></p>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+
+                <button type="button"
+                        onclick="closeResetPasswordModal()"
+                        class="bg-slate-100 hover:bg-slate-200
+                               text-slate-700 px-4 py-2 rounded-lg">
+                    Cancel
+                </button>
+
+                <button type="submit"
+                        name="reset_password"
+                        id="resetPasswordButton"
+                        class="bg-blue-600 hover:bg-blue-700
+                               text-white px-4 py-2 rounded-lg
+                               disabled:opacity-50">
+                    <i class="fa-solid fa-key mr-1"></i>
+                    Update Password
+                </button>
+
+            </div>
+
+        </form>
+    </div>
+</div>
 <script>
 const employees = <?= json_encode(
     $employees,
@@ -806,6 +1019,129 @@ function closeEditModal() {
     modal.classList.add('hidden');
     modal.classList.remove('flex');
 }
+
+// --------------------------------------------------
+// RESET STAFF PASSWORD MODAL
+// --------------------------------------------------
+
+function openResetPasswordModal(id, name, email) {
+
+    document.getElementById('resetUserId').value = id;
+
+    document.getElementById('resetUserName').textContent = name;
+
+    document.getElementById('resetUserEmail').textContent = email;
+
+    document.getElementById('resetNewPassword').value = '';
+
+    document.getElementById('resetConfirmPassword').value = '';
+
+    document.getElementById('resetPasswordMessage').textContent = '';
+
+    document.getElementById('resetPasswordButton').disabled = false;
+
+    const modal = document.getElementById('resetPasswordModal');
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+
+function closeResetPasswordModal() {
+
+    const modal = document.getElementById('resetPasswordModal');
+
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+
+// Password confirmation validation.
+
+const resetNewPassword =
+    document.getElementById('resetNewPassword');
+
+const resetConfirmPassword =
+    document.getElementById('resetConfirmPassword');
+
+const resetPasswordMessage =
+    document.getElementById('resetPasswordMessage');
+
+const resetPasswordButton =
+    document.getElementById('resetPasswordButton');
+
+
+function validateResetPassword() {
+
+    const password = resetNewPassword.value;
+    const confirmation = resetConfirmPassword.value;
+
+    if (confirmation === '') {
+
+        resetPasswordMessage.textContent = '';
+
+        resetPasswordButton.disabled = false;
+
+        return true;
+    }
+
+    if (password === confirmation) {
+
+        resetPasswordMessage.textContent = 'Passwords match.';
+
+        resetPasswordMessage.className =
+            'text-sm mt-2 text-green-600';
+
+        resetPasswordButton.disabled = false;
+
+        return true;
+
+    } else {
+
+        resetPasswordMessage.textContent =
+            'Passwords do not match.';
+
+        resetPasswordMessage.className =
+            'text-sm mt-2 text-red-600';
+
+        resetPasswordButton.disabled = true;
+
+        return false;
+    }
+}
+
+
+resetNewPassword.addEventListener(
+    'input',
+    validateResetPassword
+);
+
+resetConfirmPassword.addEventListener(
+    'input',
+    validateResetPassword
+);
+
+
+document.getElementById('resetPasswordForm')
+    .addEventListener('submit', function(event) {
+
+        if (
+            resetNewPassword.value.length < 8 ||
+            resetNewPassword.value !== resetConfirmPassword.value
+        ) {
+            event.preventDefault();
+
+            validateResetPassword();
+
+            return;
+        }
+
+        if (!confirm(
+            'Are you sure you want to reset this staff member’s password?'
+        )) {
+            event.preventDefault();
+        }
+    });
 </script>
 
 </body>
