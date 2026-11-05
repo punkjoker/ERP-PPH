@@ -73,6 +73,30 @@ function auditEsc($value) {
 }
 $details = is_array($details) ? $details : [];
 $grossPay = (float)$payroll['base_salary'] + (float)$payroll['total_allowances'];
+/*
+|--------------------------------------------------------------------------
+| PENSION CONTRIBUTION SUMMARY
+|--------------------------------------------------------------------------
+| Employee contribution is already included in payroll deductions.
+| Employer contribution is displayed separately and does not affect net pay.
+*/
+
+$pensionDetails = $details['pension'] ?? [];
+
+$pensionEnabled = !empty($pensionDetails['enabled']);
+
+$employeePension = $pensionEnabled
+    ? (float)($pensionDetails['employee_amount'] ?? 0)
+    : 0;
+
+// Employer contributes 6% of the same gross pay when employee is enrolled.
+$employerPensionRate = 6;
+
+$employerPension = $pensionEnabled
+    ? round($grossPay * ($employerPensionRate / 100), 2)
+    : 0;
+
+$totalPensionContribution = $employeePension + $employerPension;
 // The following fields may vary across calculator versions. Add the exact
 // saved JSON key to these lists if your calculator uses another name.
 // In the original calculator calculation.taxable_pay is already AFTER pre-tax deductions.
@@ -238,6 +262,119 @@ $hasMissingAudit = $taxablePay === null || $netTaxable === null || $taxCharged =
         <p><strong>Total Deductions:</strong> Ksh <?= number_format($payroll['total_deductions'], 2) ?></p>
         <hr class="my-2">
         <p class="text-xl font-bold text-blue-700">Net Pay: Ksh <?= number_format($payroll['net_pay'], 2) ?></p>
+        <!-- Pension Contribution Summary -->
+<section class="bg-white border border-gray-200 rounded-lg shadow-sm mb-6 overflow-hidden">
+
+    <div class="bg-indigo-800 text-white px-5 py-4">
+        <h2 class="text-lg font-semibold">
+            <i class="fas fa-piggy-bank mr-2"></i>
+            Pension Contribution Summary
+        </h2>
+
+        <p class="text-sm text-indigo-100">
+            Employee and employer pension contributions for <?= htmlspecialchars($monthName) ?>
+        </p>
+    </div>
+
+    <div class="p-5">
+
+        <?php if ($pensionEnabled): ?>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                <!-- Employee Contribution -->
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+
+                    <p class="text-sm text-blue-700 font-semibold">
+                        Employee Contribution (6%)
+                    </p>
+
+                    <p class="text-2xl font-bold text-blue-900 mt-2">
+                        KSh <?= number_format($employeePension, 2) ?>
+                    </p>
+
+                    <p class="text-xs text-blue-600 mt-2">
+                        Deducted from employee gross pay
+                    </p>
+
+                </div>
+
+                <!-- Employer Contribution -->
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+
+                    <p class="text-sm text-green-700 font-semibold">
+                        Employer Contribution (6%)
+                    </p>
+
+                    <p class="text-2xl font-bold text-green-900 mt-2">
+                        KSh <?= number_format($employerPension, 2) ?>
+                    </p>
+
+                    <p class="text-xs text-green-600 mt-2">
+                        Additional employer-funded contribution
+                    </p>
+
+                </div>
+
+                <!-- Combined Contribution -->
+                <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+
+                    <p class="text-sm text-indigo-700 font-semibold">
+                        Total Pension Contribution (12%)
+                    </p>
+
+                    <p class="text-2xl font-bold text-indigo-900 mt-2">
+                        KSh <?= number_format($totalPensionContribution, 2) ?>
+                    </p>
+
+                    <p class="text-xs text-indigo-600 mt-2">
+                        Combined employee and employer contributions
+                    </p>
+
+                </div>
+
+            </div>
+
+            <div class="mt-4 bg-gray-50 border rounded-lg p-4">
+
+                <div class="flex justify-between text-sm mb-2">
+                    <span class="text-gray-600">Pensionable gross pay basis</span>
+                    <strong>KSh <?= number_format($grossPay, 2) ?></strong>
+                </div>
+
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-600">Employer contribution rate</span>
+                    <strong>6%</strong>
+                </div>
+
+            </div>
+
+            <p class="text-xs text-gray-500 mt-3">
+                Employer contribution is an additional company expense.
+                It is not deducted from employee salary and does not reduce net pay.
+            </p>
+
+        <?php else: ?>
+
+            <div class="bg-gray-50 border rounded-lg p-5 text-center">
+
+                <i class="fas fa-info-circle text-gray-400 text-2xl"></i>
+
+                <p class="font-semibold text-gray-700 mt-2">
+                    Employee is not enrolled in the pension scheme.
+                </p>
+
+                <p class="text-sm text-gray-500 mt-1">
+                    No employee or employer pension contribution has been included.
+                </p>
+
+            </div>
+
+        <?php endif; ?>
+
+    </div>
+
+</section>
     </div>
 
     <!-- Payroll Tax & Audit Summary: historical saved values only -->
@@ -374,6 +511,484 @@ $hasMissingAudit = $taxablePay === null || $netTaxable === null || $taxCharged =
 </div>
 
     </div>
+    
+<?php
+/*
+|--------------------------------------------------------------------------
+| SACCO TRACKING FOR SELECTED PAYROLL MONTH
+|--------------------------------------------------------------------------
+| This is display-only. It does not modify payroll deductions or net pay.
+*/
+
+$saccoStart = $year . '-' . $monthNum . '-01';
+$saccoEnd = date('Y-m-t', strtotime($saccoStart));
+
+$saccoMemberships = [];
+$saccoError = '';
+
+try {
+    // Find every SACCO membership belonging to this payroll user.
+    $saccoStmt = $conn->prepare("
+        SELECT
+            m.sacco_member_id,
+            m.sacco_account_no,
+            m.membership_date,
+            m.status AS membership_status,
+            s.sacco_name
+        FROM hr_sacco_members m
+        INNER JOIN hr_saccos s
+            ON s.sacco_id = m.sacco_id
+        WHERE m.user_id = ?
+        ORDER BY s.sacco_name
+    ");
+
+    $saccoStmt->bind_param("i", $user_id);
+    $saccoStmt->execute();
+    $saccoMemberships = $saccoStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $saccoStmt->close();
+
+    foreach ($saccoMemberships as &$membership) {
+
+        $memberId = (int)$membership['sacco_member_id'];
+
+        /*
+         * Opening balance:
+         * All contribution-ledger activity before the selected month.
+         *
+         * Contributions are grouped using contribution_month where
+         * available, otherwise transaction_date.
+         */
+        $openingStmt = $conn->prepare("
+            SELECT COALESCE(SUM(
+                CASE
+                    WHEN transaction_type IN (
+                        'opening_balance',
+                        'contribution',
+                        'adjustment_credit'
+                    ) THEN amount
+                    ELSE -amount
+                END
+            ), 0) AS opening_balance
+            FROM hr_sacco_transactions
+            WHERE sacco_member_id = ?
+              AND (
+                    CASE
+                        WHEN transaction_type = 'contribution'
+                             AND contribution_month IS NOT NULL
+                        THEN DATE_FORMAT(contribution_month, '%Y-%m-01')
+                        ELSE DATE_FORMAT(transaction_date, '%Y-%m-01')
+                    END
+                  ) < ?
+        ");
+
+        $openingStmt->bind_param("is", $memberId, $saccoStart);
+        $openingStmt->execute();
+
+        $openingBalance = (float)$openingStmt
+            ->get_result()->fetch_assoc()['opening_balance'];
+
+        $openingStmt->close();
+
+        // Contributions recorded for the selected month.
+        $contributionStmt = $conn->prepare("
+            SELECT COALESCE(SUM(amount), 0) AS monthly_contribution
+            FROM hr_sacco_transactions
+            WHERE sacco_member_id = ?
+              AND transaction_type = 'contribution'
+              AND (
+                    (
+                        contribution_month IS NOT NULL
+                        AND contribution_month = ?
+                    )
+                    OR
+                    (
+                        contribution_month IS NULL
+                        AND transaction_date BETWEEN ? AND ?
+                    )
+                  )
+        ");
+
+        $contributionStmt->bind_param(
+            "isss",
+            $memberId,
+            $saccoStart,
+            $saccoStart,
+            $saccoEnd
+        );
+
+        $contributionStmt->execute();
+
+        $monthlyContribution = (float)$contributionStmt
+            ->get_result()->fetch_assoc()['monthly_contribution'];
+
+        $contributionStmt->close();
+
+        $membership['opening_balance'] = $openingBalance;
+        $membership['monthly_contribution'] = $monthlyContribution;
+        $membership['balance_after_contribution'] =
+            $openingBalance + $monthlyContribution;
+
+        /*
+         * Actual ledger balance at the end of the selected month.
+         * This accounts for withdrawals and adjustments as well.
+         */
+        $closingStmt = $conn->prepare("
+            SELECT COALESCE(SUM(
+                CASE
+                    WHEN transaction_type IN (
+                        'opening_balance',
+                        'contribution',
+                        'adjustment_credit'
+                    ) THEN amount
+                    ELSE -amount
+                END
+            ), 0) AS closing_balance
+            FROM hr_sacco_transactions
+            WHERE sacco_member_id = ?
+              AND (
+                    CASE
+                        WHEN transaction_type = 'contribution'
+                             AND contribution_month IS NOT NULL
+                        THEN DATE_FORMAT(contribution_month, '%Y-%m-01')
+                        ELSE DATE_FORMAT(transaction_date, '%Y-%m-01')
+                    END
+                  ) <= ?
+        ");
+
+        $closingStmt->bind_param("is", $memberId, $saccoStart);
+        $closingStmt->execute();
+
+        $membership['closing_balance'] = (float)$closingStmt
+            ->get_result()->fetch_assoc()['closing_balance'];
+
+        $closingStmt->close();
+
+        // Fetch loans issued by the end of the selected payroll month.
+        $loanStmt = $conn->prepare("
+            SELECT
+                l.loan_id,
+                l.loan_reference,
+                l.principal_amount,
+                l.interest_amount,
+                l.issue_date,
+
+                COALESCE((
+                    SELECT SUM(r1.amount)
+                    FROM hr_sacco_loan_repayments r1
+                    WHERE r1.loan_id = l.loan_id
+                      AND r1.repayment_date BETWEEN ? AND ?
+                ), 0) AS paid_this_month,
+
+                COALESCE((
+                    SELECT SUM(r2.amount)
+                    FROM hr_sacco_loan_repayments r2
+                    WHERE r2.loan_id = l.loan_id
+                      AND r2.repayment_date <= ?
+                ), 0) AS total_repaid_to_month_end
+
+            FROM hr_sacco_loans l
+            WHERE l.sacco_member_id = ?
+              AND l.issue_date <= ?
+            ORDER BY l.issue_date, l.loan_id
+        ");
+
+        $loanStmt->bind_param(
+            "sssis",
+            $saccoStart,
+            $saccoEnd,
+            $saccoEnd,
+            $memberId,
+            $saccoEnd
+        );
+
+        $loanStmt->execute();
+        $membership['loans'] = $loanStmt
+            ->get_result()->fetch_all(MYSQLI_ASSOC);
+
+        $loanStmt->close();
+
+        $membership['total_loan_amount'] = 0;
+        $membership['total_loan_paid_month'] = 0;
+        $membership['total_loan_pending'] = 0;
+
+        foreach ($membership['loans'] as &$loan) {
+
+            $loanAmount =
+                (float)$loan['principal_amount'] +
+                (float)$loan['interest_amount'];
+
+            $paidThisMonth = (float)$loan['paid_this_month'];
+
+            $pendingBalance = max(
+                0,
+                $loanAmount - (float)$loan['total_repaid_to_month_end']
+            );
+
+            $loan['total_loan_amount'] = $loanAmount;
+            $loan['pending_balance'] = $pendingBalance;
+
+            $membership['total_loan_amount'] += $loanAmount;
+            $membership['total_loan_paid_month'] += $paidThisMonth;
+            $membership['total_loan_pending'] += $pendingBalance;
+        }
+
+        unset($loan);
+    }
+
+    unset($membership);
+
+} catch (Throwable $e) {
+    $saccoError = $e->getMessage();
+}
+
+?>
+
+<?php if (!empty($saccoMemberships)): ?>
+
+<section class="mt-6 mb-6 bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+
+    <div class="bg-indigo-800 text-white px-5 py-4">
+        <h2 class="text-lg font-bold">
+            <i class="fas fa-piggy-bank mr-2"></i>
+            SACCO Contribution & Loan Tracking
+        </h2>
+
+        <p class="text-sm text-indigo-100">
+            Member financial position for <?= htmlspecialchars($monthName) ?>
+            | Independent of payroll deductions
+        </p>
+    </div>
+
+    <div class="p-5">
+
+        <?php if ($saccoError): ?>
+
+            <div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded">
+                Unable to load SACCO information:
+                <?= htmlspecialchars($saccoError) ?>
+            </div>
+
+        <?php else: ?>
+
+            <?php foreach ($saccoMemberships as $membership): ?>
+
+                <div class="border rounded-lg mb-6 overflow-hidden">
+
+                    <div class="bg-gray-100 px-4 py-3 flex flex-wrap justify-between gap-2">
+                        <div>
+                            <h3 class="font-bold text-gray-800">
+                                <?= htmlspecialchars($membership['sacco_name']) ?>
+                            </h3>
+
+                            <p class="text-xs text-gray-500">
+                                Account:
+                                <?= htmlspecialchars(
+                                    $membership['sacco_account_no'] ?: 'Not provided'
+                                ) ?>
+                            </p>
+                        </div>
+
+                        <span class="text-xs px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 font-semibold">
+                            <?= htmlspecialchars($membership['membership_status']) ?>
+                            Member
+                        </span>
+                    </div>
+
+                    <!-- CONTRIBUTION TRACKING -->
+                    <div class="p-4">
+
+                        <h4 class="font-semibold text-green-700 mb-3">
+                            <i class="fas fa-wallet mr-1"></i>
+                            Contribution Tracking
+                        </h4>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+
+                            <div class="bg-gray-50 border rounded-lg p-4">
+                                <p class="text-xs text-gray-500 uppercase">
+                                    Opening Balance
+                                </p>
+
+                                <p class="text-xl font-bold text-gray-800 mt-1">
+                                    KSh <?= number_format(
+                                        $membership['opening_balance'], 2
+                                    ) ?>
+                                </p>
+                            </div>
+
+                            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                                <p class="text-xs text-green-700 uppercase">
+                                    Contribution - <?= htmlspecialchars($monthName) ?>
+                                </p>
+
+                                <p class="text-xl font-bold text-green-800 mt-1">
+                                    KSh <?= number_format(
+                                        $membership['monthly_contribution'], 2
+                                    ) ?>
+                                </p>
+                            </div>
+
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <p class="text-xs text-blue-700 uppercase">
+                                    Balance After Contribution
+                                </p>
+
+                                <p class="text-xl font-bold text-blue-800 mt-1">
+                                    KSh <?= number_format(
+                                        $membership['balance_after_contribution'], 2
+                                    ) ?>
+                                </p>
+                            </div>
+
+                        </div>
+
+                        <?php if (
+                            abs(
+                                $membership['closing_balance'] -
+                                $membership['balance_after_contribution']
+                            ) > 0.009
+                        ): ?>
+
+                            <p class="mt-3 text-xs text-gray-600 bg-gray-50 border rounded p-3">
+                                <strong>Actual closing contribution balance:</strong>
+                                KSh <?= number_format(
+                                    $membership['closing_balance'], 2
+                                ) ?>.
+                                This includes other ledger entries such as withdrawals
+                                and adjustments during the month.
+                            </p>
+
+                        <?php endif; ?>
+
+                    </div>
+
+                    <!-- LOAN TRACKING -->
+                    <?php if (!empty($membership['loans'])): ?>
+
+                        <div class="border-t p-4">
+
+                            <h4 class="font-semibold text-red-700 mb-3">
+                                <i class="fas fa-hand-holding-usd mr-1"></i>
+                                SACCO Loan Tracking
+                            </h4>
+
+                            <div class="overflow-x-auto">
+
+                                <table class="min-w-full text-sm border-collapse">
+
+                                    <thead class="bg-red-50 text-gray-700">
+                                        <tr>
+                                            <th class="px-3 py-3 text-left">Loan Reference</th>
+                                            <th class="px-3 py-3 text-right">Loan Amount</th>
+                                            <th class="px-3 py-3 text-right">Paid This Month</th>
+                                            <th class="px-3 py-3 text-right">Pending Balance</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+
+                                        <?php foreach ($membership['loans'] as $loan): ?>
+
+                                            <tr class="border-b">
+
+                                                <td class="px-3 py-3">
+                                                    <?= htmlspecialchars(
+                                                        $loan['loan_reference'] ?: 'Loan #' . $loan['loan_id']
+                                                    ) ?>
+                                                    <p class="text-xs text-gray-500">
+                                                        Issued:
+                                                        <?= htmlspecialchars($loan['issue_date']) ?>
+                                                    </p>
+                                                </td>
+
+                                                <td class="px-3 py-3 text-right">
+                                                    KSh <?= number_format(
+                                                        $loan['total_loan_amount'], 2
+                                                    ) ?>
+                                                </td>
+
+                                                <td class="px-3 py-3 text-right text-green-700 font-semibold">
+                                                    KSh <?= number_format(
+                                                        $loan['paid_this_month'], 2
+                                                    ) ?>
+                                                </td>
+
+                                                <td class="px-3 py-3 text-right font-bold <?= $loan['pending_balance'] > 0 ? 'text-red-700' : 'text-green-700' ?>">
+                                                    KSh <?= number_format(
+                                                        $loan['pending_balance'], 2
+                                                    ) ?>
+                                                </td>
+
+                                            </tr>
+
+                                        <?php endforeach; ?>
+
+                                    </tbody>
+
+                                    <tfoot class="bg-gray-100 font-bold">
+
+                                        <tr>
+                                            <td class="px-3 py-3">Total Loans</td>
+
+                                            <td class="px-3 py-3 text-right">
+                                                KSh <?= number_format(
+                                                    $membership['total_loan_amount'], 2
+                                                ) ?>
+                                            </td>
+
+                                            <td class="px-3 py-3 text-right text-green-700">
+                                                KSh <?= number_format(
+                                                    $membership['total_loan_paid_month'], 2
+                                                ) ?>
+                                            </td>
+
+                                            <td class="px-3 py-3 text-right text-red-700">
+                                                KSh <?= number_format(
+                                                    $membership['total_loan_pending'], 2
+                                                ) ?>
+                                            </td>
+                                        </tr>
+
+                                    </tfoot>
+
+                                </table>
+
+                            </div>
+
+                        </div>
+
+                    <?php else: ?>
+
+                        <div class="border-t p-4">
+                            <h4 class="font-semibold text-gray-700 mb-1">
+                                <i class="fas fa-hand-holding-usd mr-1"></i>
+                                SACCO Loan Tracking
+                            </h4>
+
+                            <p class="text-sm text-gray-500 italic">
+                                No loan has been recorded for this SACCO membership
+                                as at <?= htmlspecialchars($monthName) ?>.
+                            </p>
+                        </div>
+
+                    <?php endif; ?>
+
+                </div>
+
+            <?php endforeach; ?>
+
+            <p class="text-xs text-gray-500 mt-3">
+                SACCO balances are displayed for information only.
+                They are not included in payroll deductions or net pay.
+            </p>
+
+        <?php endif; ?>
+
+    </div>
+</section>
+
+<?php endif; ?>
+
 <!-- Payroll Workflow Details -->
 <div class="bg-blue-50 rounded-lg p-4 mb-6">
     <h2 class="text-lg font-semibold mb-4 text-blue-800">
