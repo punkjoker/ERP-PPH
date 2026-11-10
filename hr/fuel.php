@@ -131,23 +131,90 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['update_fuel'])) {
         die("Invalid fuel record details or date selected.");
     }
 
-    // Update date but retain the original time
+    // Get existing receipt
+    $checkStmt = $conn->prepare("
+        SELECT receipt_path
+        FROM fuel_cost
+        WHERE id = ?
+        LIMIT 1
+    ");
+
+    $checkStmt->bind_param("i", $id);
+    $checkStmt->execute();
+
+    $existingRecord = $checkStmt->get_result()->fetch_assoc();
+    $checkStmt->close();
+
+    if (!$existingRecord) {
+        die("Fuel record not found.");
+    }
+
+    $old_receipt = $existingRecord['receipt_path'] ?? '';
+    $receipt_path = $old_receipt;
+
+    // Handle optional replacement receipt
+    if (
+        isset($_FILES['receipt']) &&
+        $_FILES['receipt']['error'] !== UPLOAD_ERR_NO_FILE
+    ) {
+
+        if ($_FILES['receipt']['error'] !== UPLOAD_ERR_OK) {
+            die("Receipt upload failed.");
+        }
+
+        $allowed_extensions = ['jpg', 'jpeg', 'png', 'pdf'];
+
+        $extension = strtolower(
+            pathinfo($_FILES['receipt']['name'], PATHINFO_EXTENSION)
+        );
+
+        if (!in_array($extension, $allowed_extensions, true)) {
+            die("Only JPG, JPEG, PNG and PDF receipts are allowed.");
+        }
+
+        // Maximum upload size: 5MB
+        if ($_FILES['receipt']['size'] > 5 * 1024 * 1024) {
+            die("Receipt must not exceed 5MB.");
+        }
+
+        $target_dir = "uploads/fuel_receipts/";
+
+        if (!is_dir($target_dir)) {
+            mkdir($target_dir, 0775, true);
+        }
+
+        $filename = bin2hex(random_bytes(12)) . '.' . $extension;
+        $target_file = $target_dir . $filename;
+
+        if (!move_uploaded_file(
+            $_FILES['receipt']['tmp_name'],
+            $target_file
+        )) {
+            die("Could not save the new receipt.");
+        }
+
+        $receipt_path = $target_file;
+    }
+
+    // Update record
     $stmt = $conn->prepare("
         UPDATE fuel_cost SET
             vehicle_number = ?,
             amount_refueled = ?,
             refueled_by = ?,
             approved_by = ?,
+            receipt_path = ?,
             created_at = CONCAT(?, ' ', TIME(created_at))
         WHERE id = ?
     ");
 
     $stmt->bind_param(
-        "sdsssi",
+        "sdssssi",
         $vehicle_number,
         $amount_refueled,
         $refueled_by,
         $approved_by,
+        $receipt_path,
         $refuel_date,
         $id
     );
@@ -155,9 +222,19 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['update_fuel'])) {
     $stmt->execute();
     $stmt->close();
 
+    // Delete previous receipt only after successful database update
+    if (
+        $receipt_path !== $old_receipt &&
+        !empty($old_receipt) &&
+        is_file($old_receipt)
+    ) {
+        unlink($old_receipt);
+    }
+
     header("Location: fuel.php");
     exit;
 }
+
 
 // --- Filter Section ---
 $vehicle_filter = trim($_GET['vehicle_number'] ?? '');
@@ -660,7 +737,7 @@ $vehicles = $conn->query("
                 Edit Fuel Record
             </h3>
 
-            <form method="POST">
+            <form method="POST" enctype="multipart/form-data">
 
                 <input type="hidden" name="id" id="edit_id">
 
@@ -727,7 +804,26 @@ $vehicles = $conn->query("
                            class="w-full p-2 border rounded-lg">
 
                 </div>
+<!-- Upload Replacement Receipt -->
+<div class="mb-4">
 
+    <label class="block text-sm font-medium text-blue-800 mb-1">
+        Upload New Receipt
+    </label>
+
+    <input
+        type="file"
+        name="receipt"
+        accept=".jpg,.jpeg,.png,.pdf"
+        class="w-full p-2 border rounded-lg bg-white"
+    >
+
+    <p class="text-xs text-gray-500 mt-1">
+        Optional. JPG, JPEG, PNG or PDF. Maximum 5MB.
+        Leave blank to retain the existing receipt.
+    </p>
+
+</div>
                 <div class="text-right">
 
                     <button type="submit" name="update_fuel"

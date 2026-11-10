@@ -485,7 +485,17 @@ include 'navbar.php';
                     </p>
                 </div>
             </a>
-
+<a href="applicants.php" class="module-card">
+                <div class="module-icon bg-purple-100 text-purple-700">
+                    <i class="fa-solid fa-user-plus"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold">Applicants</h3>
+                    <p class="text-sm text-gray-500 mt-1">
+                        View all job applicants
+                    </p>
+                </div>
+            </a>
         </div>
     </section>
 
@@ -903,6 +913,14 @@ include 'navbar.php';
                     <p class="text-sm text-gray-500 mt-1">Manage member loans</p>
                 </div>
             </a>
+            <a href="pension_management.php" class="module-card">
+                <div class="module-icon bg-violet-100 text-violet-700">
+                    <i class="fa-solid fa-piggy-bank"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold">Pension Management</h3>
+                    <p class="text-sm text-gray-500 mt-1">Manage pension contributions</p>
+                </div>
             <a href="sacco_reports.php" class="module-card">
                 <div class="module-icon bg-violet-100 text-violet-700">
                     <i class="fa-solid fa-chart-line"></i>

@@ -387,20 +387,10 @@ $hasMissingAudit = $taxablePay === null || $netTaxable === null || $taxCharged =
             <span class="text-xs bg-gray-700 rounded px-3 py-1">KES</span>
         </div>
         <div class="p-5">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
-                <div class="rounded-lg border bg-gray-50 p-4">
-                    <p class="text-xs uppercase tracking-wide text-gray-500">Basic Salary</p>
-                    <p class="font-bold text-gray-800 mt-1">Ksh <?= number_format((float)$payroll['base_salary'], 2) ?></p>
-                </div>
-                <div class="rounded-lg border bg-gray-50 p-4">
-                    <p class="text-xs uppercase tracking-wide text-gray-500">Allowances</p>
-                    <p class="font-bold text-gray-800 mt-1">Ksh <?= number_format((float)$payroll['total_allowances'], 2) ?></p>
-                </div>
-                <div class="rounded-lg border bg-blue-50 p-4">
-                    <p class="text-xs uppercase tracking-wide text-blue-700">Gross Pay</p>
-                    <p class="font-bold text-blue-900 mt-1">Ksh <?= number_format($grossPay, 2) ?></p>
-                </div>
-            </div>
+           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+
+    
+</div>
             <?php if ($preTaxLines && $taxablePay !== null): ?>
             <div class="mb-5 border border-gray-200 rounded-lg overflow-hidden">
                 <h3 class="bg-gray-100 px-4 py-3 font-semibold text-gray-800">Qualifying Pre-Tax Deductions</h3>
@@ -988,6 +978,378 @@ try {
 </section>
 
 <?php endif; ?>
+
+<?php
+/*
+|--------------------------------------------------------------------------
+| PENSION TRACKING FOR SELECTED PAYROLL MONTH
+|--------------------------------------------------------------------------
+| Reads the pension ledger.
+| Only Paid contributions are included in the accumulated pension balance.
+| This section is display-only and does not affect payroll calculations.
+*/
+
+$pensionTracking = [
+    'opening_balance' => 0,
+    'employee_amount' => 0,
+    'employer_amount' => 0,
+    'total_contribution' => 0,
+    'remittance_status' => 'Not Recorded',
+    'payment_date' => null,
+    'payment_reference' => null,
+    'cumulative_paid' => 0
+];
+
+$pensionTrackingError = '';
+
+try {
+    $selectedYear = (int)$year;
+    $selectedMonthStart = date('Y-m-01', strtotime($selectedMonth . '-01'));
+
+    // 1. Fetch employee opening pension balance.
+    $openingPensionStmt = $conn->prepare("
+        SELECT opening_balance, effective_date
+        FROM employee_pension_opening_balances
+        WHERE user_id = ?
+          AND (
+                effective_date IS NULL
+                OR effective_date <= ?
+          )
+        LIMIT 1
+    ");
+
+    $openingPensionStmt->bind_param(
+        "is",
+        $user_id,
+        $saccoEnd
+    );
+
+    $openingPensionStmt->execute();
+
+    $openingPension = $openingPensionStmt
+        ->get_result()
+        ->fetch_assoc();
+
+    if ($openingPension) {
+        $pensionTracking['opening_balance'] =
+            (float)$openingPension['opening_balance'];
+    }
+
+    $openingPensionStmt->close();
+
+
+    // 2. Fetch pension contribution for the selected payroll month.
+    $monthlyPensionStmt = $conn->prepare("
+        SELECT
+            employee_amount,
+            employer_amount,
+            total_contribution,
+            remittance_status,
+            payment_date,
+            payment_reference
+        FROM pension_contributions
+        WHERE user_id = ?
+          AND month = ?
+          AND year = ?
+        LIMIT 1
+    ");
+
+    $monthlyPensionStmt->bind_param(
+        "isi",
+        $user_id,
+        $monthText,
+        $selectedYear
+    );
+
+    $monthlyPensionStmt->execute();
+
+    $monthlyPension = $monthlyPensionStmt
+        ->get_result()
+        ->fetch_assoc();
+
+    if ($monthlyPension) {
+        $pensionTracking['employee_amount'] =
+            (float)$monthlyPension['employee_amount'];
+
+        $pensionTracking['employer_amount'] =
+            (float)$monthlyPension['employer_amount'];
+
+        $pensionTracking['total_contribution'] =
+            (float)$monthlyPension['total_contribution'];
+
+        $pensionTracking['remittance_status'] =
+            $monthlyPension['remittance_status'];
+
+        $pensionTracking['payment_date'] =
+            $monthlyPension['payment_date'];
+
+        $pensionTracking['payment_reference'] =
+            $monthlyPension['payment_reference'];
+    }
+
+    $monthlyPensionStmt->close();
+
+// 3. Calculate all accrued pension contributions up to selected month.
+// Include BOTH Paid and Pending contributions in the accrued balance.
+$cumulativePensionStmt = $conn->prepare("
+    SELECT
+        COALESCE(SUM(total_contribution), 0) AS accrued_contributions,
+        COALESCE(SUM(
+            CASE
+                WHEN LOWER(TRIM(remittance_status)) = 'paid'
+                THEN total_contribution
+                ELSE 0
+            END
+        ), 0) AS cumulative_paid
+    FROM pension_contributions
+    WHERE user_id = ?
+      AND STR_TO_DATE(
+            CONCAT('01 ', month, ' ', year),
+            '%d %M %Y'
+          ) <= STR_TO_DATE(
+            CONCAT('01 ', ?, ' ', ?),
+            '%d %M %Y'
+          )
+");
+
+$cumulativePensionStmt->bind_param(
+    "iss",
+    $user_id,
+    $monthText,
+    $year
+);
+
+$cumulativePensionStmt->execute();
+
+$cumulativeResult = $cumulativePensionStmt
+    ->get_result()
+    ->fetch_assoc();
+
+$pensionTracking['accrued_contributions'] =
+    (float)$cumulativeResult['accrued_contributions'];
+
+$pensionTracking['cumulative_paid'] =
+    (float)$cumulativeResult['cumulative_paid'];
+
+$cumulativePensionStmt->close();
+
+// Closing balance includes ALL accrued contributions,
+// regardless of whether remittance has been paid.
+$pensionTracking['closing_balance'] =
+    $pensionTracking['opening_balance'] +
+    $pensionTracking['accrued_contributions'];
+
+} catch (Throwable $e) {
+    $pensionTrackingError = $e->getMessage();
+}
+?>
+
+<!-- PENSION TRACKING -->
+<section class="mt-6 mb-6 bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+
+    <div class="bg-green-800 text-white px-5 py-4">
+        <h2 class="text-lg font-bold">
+            <i class="fas fa-piggy-bank mr-2"></i>
+            Pension Contribution Tracking
+        </h2>
+
+        <p class="text-sm text-green-100">
+            Employee and employer pension position for
+            <?= htmlspecialchars($monthName) ?>
+            | Independent of SACCO tracking
+        </p>
+    </div>
+
+    <div class="p-5">
+
+        <?php if ($pensionTrackingError): ?>
+
+            <div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded">
+                Unable to load pension information:
+                <?= htmlspecialchars($pensionTrackingError) ?>
+            </div>
+
+        <?php else: ?>
+
+            <!-- Pension Balance Summary -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+
+                <div class="bg-gray-50 border rounded-lg p-4">
+                    <p class="text-xs text-gray-500 uppercase">
+                        Opening Pension Balance
+                    </p>
+
+                    <p class="text-xl font-bold text-gray-800 mt-2">
+                        KSh <?= number_format(
+                            $pensionTracking['opening_balance'], 2
+                        ) ?>
+                    </p>
+                </div>
+
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <p class="text-xs text-blue-700 uppercase">
+                        Contributions Remitted to Date
+                    </p>
+
+                    <p class="text-xl font-bold text-blue-900 mt-2">
+                        KSh <?= number_format(
+                            $pensionTracking['cumulative_paid'], 2
+                        ) ?>
+                    </p>
+                </div>
+
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <p class="text-xs text-green-700 uppercase">
+                        Closing Pension Balance
+                    </p>
+
+                    <p class="text-xl font-bold text-green-900 mt-2">
+                        KSh <?= number_format(
+                            $pensionTracking['closing_balance'], 2
+                        ) ?>
+                    </p>
+                    <p class="text-xs text-green-700 mt-1">
+                        Opening balance + remitted contributions
+                    </p>
+                </div>
+
+            </div>
+
+
+            <!-- Monthly Contributions -->
+            <h3 class="font-semibold text-gray-800 mb-3">
+                Monthly Contribution Breakdown
+            </h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <p class="text-sm text-blue-700 font-semibold">
+                        Employee Contribution (6%)
+                    </p>
+
+                    <p class="text-2xl font-bold text-blue-900 mt-2">
+                        KSh <?= number_format(
+                            $pensionTracking['employee_amount'], 2
+                        ) ?>
+                    </p>
+                    <p class="text-xs text-blue-600 mt-1">
+                        Deducted from employee payroll
+                    </p>
+                </div>
+
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <p class="text-sm text-green-700 font-semibold">
+                        Employer Contribution (6%)
+                    </p>
+
+                    <p class="text-2xl font-bold text-green-900 mt-2">
+                        KSh <?= number_format(
+                            $pensionTracking['employer_amount'], 2
+                        ) ?>
+                    </p>
+                    <p class="text-xs text-green-600 mt-1">
+                        Additional employer-funded contribution
+                    </p>
+                </div>
+
+                <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                    <p class="text-sm text-indigo-700 font-semibold">
+                        Total Monthly Contribution (12%)
+                    </p>
+
+                    <p class="text-2xl font-bold text-indigo-900 mt-2">
+                        KSh <?= number_format(
+                            $pensionTracking['total_contribution'], 2
+                        ) ?>
+                    </p>
+                    <p class="text-xs text-indigo-600 mt-1">
+                        Employee + employer
+                    </p>
+                </div>
+
+            </div>
+
+
+            <!-- Remittance Information -->
+            <div class="border rounded-lg overflow-hidden">
+
+                <div class="bg-gray-100 px-4 py-3">
+                    <h3 class="font-semibold text-gray-800">
+                        Pension Remittance Information
+                    </h3>
+                </div>
+
+                <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                    <div>
+                        <p class="text-xs text-gray-500 uppercase">
+                            Remittance Status
+                        </p>
+
+                        <?php
+                        $remittanceStatus =
+                            $pensionTracking['remittance_status'];
+
+                        $statusClass = strtolower(trim($remittanceStatus)) === 'paid'
+    ? 'bg-green-100 text-green-700'
+    : 'bg-yellow-100 text-yellow-700';
+                        ?>
+
+                        <span class="inline-block mt-2 px-3 py-1 rounded-full text-sm font-semibold <?= $statusClass ?>">
+                            <?= htmlspecialchars($remittanceStatus) ?>
+                        </span>
+                    </div>
+
+                    <div>
+                        <p class="text-xs text-gray-500 uppercase">
+                            Payment Date
+                        </p>
+
+                        <p class="font-semibold text-gray-800 mt-2">
+                            <?= !empty($pensionTracking['payment_date'])
+                                ? htmlspecialchars($pensionTracking['payment_date'])
+                                : 'Not recorded' ?>
+                        </p>
+                    </div>
+
+                    <div>
+                        <p class="text-xs text-gray-500 uppercase">
+                            Payment Reference
+                        </p>
+
+                        <p class="font-semibold text-gray-800 mt-2">
+                            <?= !empty($pensionTracking['payment_reference'])
+                                ? htmlspecialchars($pensionTracking['payment_reference'])
+                                : 'Not recorded' ?>
+                        </p>
+                    </div>
+
+                </div>
+            </div>
+
+            <?php if (!$monthlyPension): ?>
+
+                <div class="mt-4 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg p-3 text-sm">
+                    No pension contribution record was found for
+                    <?= htmlspecialchars($monthName) ?>.
+                    The contribution will appear here once the payroll
+                    has been saved with pension enabled.
+                </div>
+
+            <?php endif; ?>
+
+            <p class="text-xs text-gray-500 mt-4">
+                Pension tracking is for reporting and reconciliation.
+                Pending contributions are excluded from the closing
+                remitted balance. Employer contributions do not reduce
+                employee net pay.
+            </p>
+
+        <?php endif; ?>
+
+    </div>
+</section>
 
 <!-- Payroll Workflow Details -->
 <div class="bg-blue-50 rounded-lg p-4 mb-6">

@@ -37,7 +37,9 @@ function kenyaStandardPayroll(float $basic, array $allowances, array $otherDeduc
     $pensionEnabled = ($pension['enabled'] ?? false) === true;
     $pensionQualified = ($pension['tax_qualified'] ?? false) === true;
     $employeePension = $pensionEnabled ? round($gross * 0.06, 2) : 0.0;
-    $employerPension = 0.0;
+    $employerPension = $pensionEnabled
+    ? round($gross * 0.06, 2)
+    : 0.0;
     // Shared monthly cap for qualifying employee NSSF + registered pension.
     $pensionTaxDeduction = min(30000.0, $nssf + ($pensionQualified ? $employeePension : 0.0));
     $taxable = max(0, round($gross - $pensionTaxDeduction - $shif - $ahl, 2));
@@ -98,7 +100,16 @@ function kenyaStandardPayroll(float $basic, array $allowances, array $otherDeduc
                 'paye_deducted'=>$paye,
                 'net_pay'=>round($gross-$deductions,2)
             ],
-            'pension'=>['enabled'=>$pensionEnabled, 'employee_rate'=>6, 'employer_rate'=>0, 'basis'=>'gross', 'tax_qualified'=>$pensionQualified, 'employee_amount'=>$employeePension, 'employer_amount'=>$employerPension, 'tax_deduction_including_nssf'=>$pensionTaxDeduction],
+'pension'=>[
+    'enabled'=>$pensionEnabled,
+    'employee_rate'=>6,
+    'employer_rate'=>0,
+    'basis'=>'gross',
+    'tax_qualified'=>$pensionQualified,
+    'employee_amount'=>$employeePension,
+    'employer_amount'=>$employerPension,
+    'tax_deduction_including_nssf'=>$pensionTaxDeduction
+],
             'calculation'=>['rule_set'=>'KE_STANDARD_2026_02_PENSION', 'period'=>$period, 'taxable_pay'=>$taxable,
                 'paye_before_relief'=>$payeBeforeRelief, 'personal_relief'=>$personalRelief,
                 'net_taxable_pay'=>$taxable, 'tax_charged'=>$payeBeforeRelief, 'tax_relief'=>$reliefApplied, 'paye_deducted'=>$paye,

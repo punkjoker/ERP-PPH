@@ -30,6 +30,11 @@
           </a>
         </li>
         <li>
+          <a href="department_leaves.php" class="block hover:bg-blue-200 p-2 rounded">
+            <i class="fa-solid fa-calendar-days mr-2 text-blue-600"></i>Approve Department Leaves
+          </a>
+        </li>
+        <li>
           <a href="training_request.php" class="block hover:bg-blue-200 p-2 rounded">
             <i class="fa-solid fa-graduation-cap mr-2 text-blue-600"></i>Request Trainings
           </a>
@@ -77,6 +82,11 @@
         <li>
           <a href="user_performance_evaluation.php" class="block hover:bg-blue-200 p-2 rounded">
             <i class="fa-solid fa-chart-line mr-2 text-blue-600"></i>Performance
+          </a>
+        </li>
+        <li>
+          <a href='my_p9.php' class='block hover:bg-blue-200 p-2 rounded'>
+            <i class='fa-solid fa-file-invoice-dollar mr-2 text-blue-600'></i>My P9
           </a>
         </li>
       

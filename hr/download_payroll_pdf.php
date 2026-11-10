@@ -319,6 +319,138 @@ try {
     $saccoPdfError = 'SACCO information could not be loaded.';
 }
 
+/*
+|--------------------------------------------------------------------------
+| PENSION TRACKING DATA FOR PDF
+|--------------------------------------------------------------------------
+*/
+
+$pensionPdf = [
+    'opening_balance' => 0,
+    'employee_amount' => 0,
+    'employer_amount' => 0,
+    'total_contribution' => 0,
+    'cumulative_contributions' => 0,
+    'closing_balance' => 0,
+    'remittance_status' => 'Not Recorded'
+];
+
+$pensionPdfError = '';
+
+try {
+    // Opening pension balance
+    $pensionOpeningStmt = $conn->prepare("
+        SELECT opening_balance
+        FROM employee_pension_opening_balances
+        WHERE user_id = ?
+          AND (effective_date IS NULL OR effective_date <= ?)
+        LIMIT 1
+    ");
+
+    $pensionOpeningStmt->bind_param(
+        'is',
+        $user_id,
+        $monthEnd
+    );
+
+    $pensionOpeningStmt->execute();
+    $openingRow = $pensionOpeningStmt->get_result()->fetch_assoc();
+
+    if ($openingRow) {
+        $pensionPdf['opening_balance'] =
+            (float)$openingRow['opening_balance'];
+    }
+
+    $pensionOpeningStmt->close();
+
+
+    // Selected month's pension contribution
+    $pensionMonthStmt = $conn->prepare("
+        SELECT
+            employee_amount,
+            employer_amount,
+            total_contribution,
+            remittance_status
+        FROM pension_contributions
+        WHERE user_id = ?
+          AND month = ?
+          AND year = ?
+        LIMIT 1
+    ");
+
+    $pensionMonthStmt->bind_param(
+        'isi',
+        $user_id,
+        $monthText,
+        $year
+    );
+
+    $pensionMonthStmt->execute();
+    $pensionMonthRow = $pensionMonthStmt->get_result()->fetch_assoc();
+
+    if ($pensionMonthRow) {
+
+    $pensionPdf['employee_amount'] =
+        (float)$pensionMonthRow['employee_amount'];
+
+    $pensionPdf['employer_amount'] =
+        (float)$pensionMonthRow['employer_amount'];
+
+    $pensionPdf['total_contribution'] =
+        (float)$pensionMonthRow['total_contribution'];
+
+    $pensionPdf['remittance_status'] =
+        $pensionMonthRow['remittance_status'];
+
+} else {
+
+    // Fallback to the saved payroll calculation.
+    $pensionPdf['employee_amount'] = $employeePension;
+    $pensionPdf['employer_amount'] = $employerPension;
+
+    $pensionPdf['total_contribution'] =
+        $employeePension + $employerPension;
+
+    $pensionPdf['remittance_status'] = 'Not Recorded';
+}
+
+    $pensionMonthStmt->close();
+
+// Total accrued pension contributions up to the selected payroll month.
+// Include both Paid and Pending contributions in the closing balance.
+$pensionPaidStmt = $conn->prepare("
+    SELECT COALESCE(SUM(total_contribution), 0) AS cumulative_contributions
+    FROM pension_contributions
+    WHERE user_id = ?
+      AND STR_TO_DATE(
+            CONCAT('01 ', month, ' ', year),
+            '%d %M %Y'
+          ) <= ?
+");
+
+$pensionPaidStmt->bind_param(
+    'is',
+    $user_id,
+    $monthStart
+);
+
+$pensionPaidStmt->execute();
+$paidRow = $pensionPaidStmt->get_result()->fetch_assoc();
+
+$pensionPdf['cumulative_contributions'] =
+    (float)$paidRow['cumulative_contributions'];
+
+$pensionPaidStmt->close();
+
+// Closing balance = Opening balance + all accrued contributions.
+$pensionPdf['closing_balance'] =
+    $pensionPdf['opening_balance'] +
+    $pensionPdf['cumulative_contributions'];
+
+} catch (Throwable $e) {
+    $pensionPdfError = 'Pension information could not be loaded.';
+}
+
 class LynnPayrollPDF extends FPDF {
     public function safeCell($w, $h, $value, $border = 0, $ln = 0, $align = 'L', $fill = false, $max = 0) {
         $value = payrollPdfText($value);
@@ -333,18 +465,16 @@ $pdf->SetMargins(10, 8, 10);
 $pdf->SetAutoPageBreak(false);
 $pdf->AddPage();
 $W = 190;
-$pdf->SetFillColor(24, 49, 80);
-$pdf->Rect(10, 8, 190, 23, 'F');
-$logo = __DIR__ . '/images/lynn_logo.png';
-if (is_file($logo)) { $pdf->Image($logo, 13, 10, 22, 18); }
-$pdf->SetTextColor(255,255,255);
-$pdf->SetFont('Arial','B',12);
-$pdf->SetXY(39,11);
-$pdf->safeCell(158,7,'LYNNTECH CHEMICALS & EQUIPMENT LTD',0,1,'L',false,156);
-$pdf->SetX(39); $pdf->SetFont('Arial','',9);
-$pdf->safeCell(158,5,'EMPLOYEE PAYSLIP | ' . $period,0,1,'L');
+// SIMPLE PAYSLIP HEADER - EMPLOYEE NAME ONLY
 $pdf->SetTextColor(28,43,61);
+$pdf->SetFont('Arial','B',14);
+$pdf->SetY(9);
 
+$pdf->SetFont('Arial','',9);
+$pdf->safeCell(190,5,' LYNNTECH CHEMICALS $ EQUIPMENT LTD PAYSLIP | '.$period,0,1,'C');
+
+$pdf->SetDrawColor(180,190,200);
+$pdf->Line(10,24,200,24);
 function sectionTitle($pdf, $text, $h = 6) {
     $pdf->SetFillColor(232,239,247);
     $pdf->SetFont('Arial','B',9);
@@ -355,7 +485,7 @@ function detailPair($pdf,$left,$right,$h=5.5) {
     $pdf->safeCell(95,$h,$left,1,0,'L',false,91);
     $pdf->safeCell(95,$h,$right,1,1,'L',false,91);
 }
-$pdf->SetY(34);
+$pdf->SetY(27);
 sectionTitle($pdf,'EMPLOYEE & PAYROLL INFORMATION');
 detailPair($pdf,'Name: '.($payroll['full_name'] ?? '-'),'Payroll #: '.($payroll['payroll_no'] ?: '-'));
 detailPair($pdf,'Email: '.($payroll['email'] ?? '-'),'National ID: '.($payroll['national_id'] ?? '-'));
@@ -410,31 +540,42 @@ $dedCount = max(1,count($deductions));
 // Reserve about 39 mm for workflow/footer, 10 mm for section headings.
 
 // Reserve space for the SACCO section before calculating payroll row heights.
-$saccoPdfRows = 0;
 
-foreach ($saccoPdfMembers as $member) {
-    $saccoPdfRows += max(1, count($member['loans']));
-}
 
-$saccoReserve = !empty($saccoPdfMembers)
-    ? 12 + ($saccoPdfRows * 5.2)
-    : 0;
+/*
+|--------------------------------------------------------------------------
+| ONE-PAGE A4 SPACE CALCULATION
+|--------------------------------------------------------------------------
+*/
 
-// Reserve space for the pension section already displayed above.
+// Each section now contains only one consolidated data row.
+$saccoReserve = !empty($saccoPdfMembers) ? 18 : 0;
+$pensionReserve = 18;
+
+$workflowReserve = 39;
+$breakdownReserve = 24;
 
 $available = 278
     - $pdf->GetY()
-    - 39
-    - 15
-    - $saccoReserve;
+    - $workflowReserve
+    - $breakdownReserve
+    - $saccoReserve
+    - $pensionReserve;
 
-$lineHeight = min(5.3, $available / ($allowCount + $dedCount));
+$totalRows = $allowCount + $dedCount;
+
+$lineHeight = min(5.0, $available / $totalRows);
+
 if ($lineHeight < 2.6) {
-    // Explicit failure avoids silently dropping deductions or generating a second page.
     http_response_code(422);
-    exit('Too many payroll line items for a legible one-page A4 payslip. Reduce or consolidate line items.');
+    exit('Too many payroll items to fit legibly on one A4 page.');
 }
-$lineFont = $lineHeight < 3.5 ? 6.1 : ($lineHeight < 4.3 ? 6.8 : 7.5);
+
+$lineFont = $lineHeight < 3.5
+    ? 6.1
+    : ($lineHeight < 4.3 ? 6.8 : 7.2);
+
+
 function breakdown($pdf, $title, $items, $h, $font, $isDeduction) {
     sectionTitle($pdf,$title,5.5);
     $pdf->SetFillColor(245,247,250); $pdf->SetFont('Arial','B',7.5);
@@ -482,203 +623,271 @@ $pdf->Ln(2);
 |--------------------------------------------------------------------------
 */
 
-if (!empty($saccoPdfMembers)) {
+/*
+|--------------------------------------------------------------------------
+| SACCO MONTHLY SUMMARY - ONE ROW
+|--------------------------------------------------------------------------
+*/
 
-    sectionTitle($pdf,'SACCO CONTRIBUTION & LOAN TRACKING',5.5);
+/*
+|--------------------------------------------------------------------------
+| SACCO CONTRIBUTION AND LOAN SUMMARY
+|--------------------------------------------------------------------------
+*/
 
-    $pdf->SetFont('Arial','',6.5);
+$pdf->Ln(1);
+sectionTitle($pdf, 'SACCO CONTRIBUTION SUMMARY', 5);
 
-    if ($saccoPdfError !== '') {
+if ($saccoPdfError !== '') {
 
-        $pdf->safeCell(
-            190,
-            5,
-            $saccoPdfError,
-            1,
-            1,
-            'L'
-        );
+    $pdf->SetFont('Arial', '', 7);
+    $pdf->safeCell(190, 5, $saccoPdfError, 1, 1);
 
-    } else {
+} elseif (empty($saccoPdfMembers)) {
 
-        // Table headings. Total width = 190mm.
-        $pdf->SetFillColor(232,239,247);
-        $pdf->SetFont('Arial','B',6.2);
+    $pdf->SetFont('Arial', '', 7);
+    $pdf->safeCell(190, 5, 'No SACCO membership recorded for this employee.', 1, 1);
 
-        $headers = [
-            [31, 'SACCO'],
-            [22, 'RECORD'],
-            [23, 'OPENING'],
-            [23, 'CONTRIB.'],
-            [25, 'CONTRIB. BAL.'],
-            [22, 'LOAN'],
-            [21, 'PAID'],
-            [23, 'PENDING']
-        ];
+} else {
 
-        foreach ($headers as $i => $header) {
-            $pdf->safeCell(
-                $header[0],
-                5,
-                $header[1],
-                1,
-                $i === count($headers) - 1 ? 1 : 0,
-                'C',
-                true,
-                $header[0] - 1
-            );
+    // Individual SACCO contribution balances
+    $pdf->SetFillColor(232,239,247);
+    $pdf->SetFont('Arial', 'B', 6.5);
+
+    $pdf->safeCell(60, 4.5, 'SACCO', 1, 0, 'L', true);
+    $pdf->safeCell(43, 4.5, 'OPENING BALANCE', 1, 0, 'C', true);
+    $pdf->safeCell(43, 4.5, 'THIS MONTH', 1, 0, 'C', true);
+    $pdf->safeCell(44, 4.5, 'CURRENT BALANCE', 1, 1, 'C', true);
+
+    $pdf->SetFont('Arial', '', 7);
+
+    foreach ($saccoPdfMembers as $member) {
+
+        $saccoName = $member['sacco_name'] ?? 'SACCO';
+
+        if (!empty($member['sacco_account_no'])) {
+            $saccoName .= ' (' . $member['sacco_account_no'] . ')';
         }
 
-        $pdf->SetFont('Arial','',6.2);
+        $pdf->safeCell(60, 4.5, $saccoName, 1, 0, 'L', false, 57);
+
+        $pdf->safeCell(
+            43, 4.5,
+            number_format((float)$member['opening_balance'], 2),
+            1, 0, 'R'
+        );
+
+        $pdf->safeCell(
+            43, 4.5,
+            number_format((float)$member['monthly_contribution'], 2),
+            1, 0, 'R'
+        );
+
+        $pdf->SetFont('Arial', 'B', 7);
+
+        $pdf->safeCell(
+            44, 4.5,
+            number_format((float)$member['balance_after_contribution'], 2),
+            1, 1, 'R'
+        );
+
+        $pdf->SetFont('Arial', '', 7);
+    }
+
+    // Individual SACCO loans
+    $hasLoans = false;
+
+    foreach ($saccoPdfMembers as $member) {
+        if (!empty($member['loans'])) {
+            $hasLoans = true;
+            break;
+        }
+    }
+
+    if ($hasLoans) {
+
+        $pdf->Ln(1);
+        sectionTitle($pdf, 'SACCO LOAN SUMMARY', 5);
+
+        $pdf->SetFillColor(232,239,247);
+        $pdf->SetFont('Arial', 'B', 6.5);
+
+        $pdf->safeCell(42, 4.5, 'SACCO / LOAN', 1, 0, 'L', true);
+        $pdf->safeCell(35, 4.5, 'LOAN AMOUNT', 1, 0, 'C', true);
+        $pdf->safeCell(35, 4.5, 'PAID THIS MONTH', 1, 0, 'C', true);
+        $pdf->safeCell(35, 4.5, 'OUTSTANDING', 1, 0, 'C', true);
+        $pdf->safeCell(43, 4.5, 'LOAN REFERENCE', 1, 1, 'C', true);
+
+        $pdf->SetFont('Arial', '', 7);
 
         foreach ($saccoPdfMembers as $member) {
 
-            $saccoName = $member['sacco_name'];
-
-            $opening = (float)$member['opening_balance'];
-            $contribution = (float)$member['monthly_contribution'];
-            $contributionBalance =
-                (float)$member['balance_after_contribution'];
-
-            /*
-             * Display contribution figures on the first row.
-             * Subsequent rows show the individual loans.
-             */
-
             if (empty($member['loans'])) {
+                continue;
+            }
 
-                $pdf->safeCell(31,5,$saccoName,1,0,'L',false,29);
-                $pdf->safeCell(22,5,'Contribution',1,0,'L',false,20);
-                $pdf->safeCell(23,5,payrollFmt($opening),1,0,'R');
-                $pdf->safeCell(23,5,payrollFmt($contribution),1,0,'R');
-                $pdf->safeCell(25,5,payrollFmt($contributionBalance),1,0,'R');
-                $pdf->safeCell(22,5,'-',1,0,'R');
-                $pdf->safeCell(21,5,'-',1,0,'R');
-                $pdf->safeCell(23,5,'-',1,1,'R');
+            foreach ($member['loans'] as $loan) {
 
-            } else {
+                $saccoName = $member['sacco_name'] ?? 'SACCO';
 
-                foreach ($member['loans'] as $index => $loan) {
+                $pdf->safeCell(
+                    42, 4.5, $saccoName, 1, 0, 'L', false, 39
+                );
 
-                    $isFirst = ($index === 0);
+                $pdf->safeCell(
+                    35, 4.5,
+                    number_format((float)$loan['loan_amount'], 2),
+                    1, 0, 'R'
+                );
 
-                    $pdf->safeCell(
-                        31,
-                        5,
-                        $isFirst ? $saccoName : '',
-                        1,
-                        0,
-                        'L',
-                        false,
-                        29
-                    );
+                $pdf->safeCell(
+                    35, 4.5,
+                    number_format((float)$loan['paid_this_month'], 2),
+                    1, 0, 'R'
+                );
 
-                    $pdf->safeCell(
-                        22,
-                        5,
-                        $isFirst ? 'Contribution' : 'Loan',
-                        1,
-                        0,
-                        'L',
-                        false,
-                        20
-                    );
+                $pdf->safeCell(
+                    35, 4.5,
+                    number_format((float)$loan['pending_balance'], 2),
+                    1, 0, 'R'
+                );
 
-                    $pdf->safeCell(
-                        23,
-                        5,
-                        $isFirst ? payrollFmt($opening) : '-',
-                        1,
-                        0,
-                        'R'
-                    );
-
-                    $pdf->safeCell(
-                        23,
-                        5,
-                        $isFirst ? payrollFmt($contribution) : '-',
-                        1,
-                        0,
-                        'R'
-                    );
-
-                    $pdf->safeCell(
-                        25,
-                        5,
-                        $isFirst ? payrollFmt($contributionBalance) : '-',
-                        1,
-                        0,
-                        'R'
-                    );
-
-                    $pdf->safeCell(
-                        22,
-                        5,
-                        payrollFmt($loan['loan_amount']),
-                        1,
-                        0,
-                        'R'
-                    );
-
-                    $pdf->safeCell(
-                        21,
-                        5,
-                        payrollFmt($loan['paid_this_month']),
-                        1,
-                        0,
-                        'R'
-                    );
-
-                    $pdf->safeCell(
-                        23,
-                        5,
-                        payrollFmt($loan['pending_balance']),
-                        1,
-                        1,
-                        'R'
-                    );
-                }
+                $pdf->safeCell(
+                    43, 4.5,
+                    $loan['loan_reference'] ?? ('Loan #' . $loan['loan_id']),
+                    1, 1, 'L', false, 40
+                );
             }
         }
-
-        $pdf->SetFont('Arial','I',6.5);
-
-        $pdf->safeCell(
-            190,
-            4,
-            'SACCO contributions and loan repayments are tracked independently and are not included in payroll deductions or net pay.',
-            0,
-            1,
-            'L'
-        );
     }
-
-    $pdf->Ln(2);
 }
 
-sectionTitle($pdf,'PAYROLL WORKFLOW & AUTHORIZATION',5.5);
+$pdf->Ln(1);
 
-$pdf->SetFont('Arial','B',7.5); $pdf->SetFillColor(245,247,250);
-foreach ([['PREPARED BY',63],['APPROVED BY',63],['PAID BY',64]] as $col) $pdf->safeCell($col[1],5,$col[0],1,$col[0]==='PAID BY'?1:0,'C',true);
-$pdf->SetFont('Arial','',7);
+
+sectionTitle($pdf, 'PENSION CONTRIBUTION SUMMARY', 5);
+
+if ($pensionPdfError !== '') {
+
+    $pdf->SetFont('Arial', '', 7);
+    $pdf->safeCell(190, 5, $pensionPdfError, 1, 1);
+
+} else {
+
+    $pdf->SetFillColor(232,239,247);
+    $pdf->SetFont('Arial','B',6.2);
+
+    $pdf->safeCell(38,4.5,'OPENING BALANCE',1,0,'C',true);
+    $pdf->safeCell(38,4.5,'EMPLOYEE (6%)',1,0,'C',true);
+    $pdf->safeCell(38,4.5,'EMPLOYER (6%)',1,0,'C',true);
+    $pdf->safeCell(38,4.5,'TOTAL THIS MONTH',1,0,'C',true);
+    $pdf->safeCell(38,4.5,'CLOSING BALANCE',1,1,'C',true);
+
+    $pdf->SetFont('Arial','',7);
+
+    $pdf->safeCell(
+        38, 5,
+        payrollFmt($pensionPdf['opening_balance']),
+        1, 0, 'R'
+    );
+
+    $pdf->safeCell(
+        38, 5,
+        payrollFmt($pensionPdf['employee_amount']),
+        1, 0, 'R'
+    );
+
+    $pdf->safeCell(
+        38, 5,
+        payrollFmt($pensionPdf['employer_amount']),
+        1, 0, 'R'
+    );
+
+    $pdf->safeCell(
+        38, 5,
+        payrollFmt($pensionPdf['total_contribution']),
+        1, 0, 'R'
+    );
+
+    $pdf->safeCell(
+        38, 5,
+        payrollFmt($pensionPdf['closing_balance']),
+        1, 1, 'R'
+    );
+
+    $pdf->SetFont('Arial','',7);
+
+    $pdf->safeCell(
+        190, 5,
+        'Remittance status: '.$pensionPdf['remittance_status'],
+        1, 1, 'L'
+    );
+}
+
+$pdf->Ln(1);
+
+$pdf->SetFont('Arial', 'B', 7.5);
+$pdf->SetFillColor(245,247,250);
+
 $columns = [
-    ['prepared_by','date_prepared','preparation_status',63],
-    ['approved_by','approval_date','approval_status',63],
-    ['accountant_name','payment_date','payment_status',64]
+    ['prepared_by', 63],
+    ['approved_by', 63],
+    ['accountant_name', 64]
 ];
-foreach ([0,1,2] as $r) {
-    foreach ($columns as $i=>$col) {
-        $prefix = ['Name: ','Date: ','Status: '][$r];
-        $v = trim((string)($payroll[$col[$r]] ?? ''));
-        $pdf->safeCell($col[3],5,$prefix.($v!==''?$v:'Not recorded'),1,$i===2?1:0,'L',false,$col[3]-3);
-    }
+
+// Column headings
+foreach ([
+    ['PREPARED BY', 63],
+    ['APPROVED BY', 63],
+    ['PAID BY', 64]
+] as $i => $col) {
+    $pdf->safeCell(
+        $col[1], 5, $col[0],
+        1, $i === 2 ? 1 : 0, 'C', true
+    );
 }
-$pdf->SetFont('Arial','',7);
-foreach ([63,63,64] as $i=>$width) $pdf->safeCell($width,7,'Signature: __________________',0,$i===2?1:0,'L');
-$pdf->SetFont('Arial','I',7);
-$pdf->safeCell(190,4,'Generated by Lynntech HR Manager on '.date('d M Y').'. Amounts reflect the saved payroll snapshot.',0,1,'C');
-if ($pdf->GetY() > 290) { http_response_code(422); exit('Payslip exceeds one A4 page.'); }
+
+// Names only
+$pdf->SetFont('Arial', '', 7);
+
+foreach ($columns as $i => $col) {
+
+    $name = trim((string)($payroll[$col[0]] ?? ''));
+
+    $pdf->safeCell(
+        $col[1],
+        9,
+        $name !== '' ? $name : 'Not recorded',
+        1,
+        $i === 2 ? 1 : 0,
+        'C',
+        false,
+        $col[1] - 4
+    );
+}
+
+$pdf->SetFont('Arial', 'I', 7);
+$pdf->safeCell(
+    190,
+    4,
+    'Generated by Lynntech HR Manager on ' . date('d M Y') . '. Amounts reflect the saved payroll snapshot.',
+    0,
+    1,
+    'C'
+);
+
+if ($pdf->GetY() > 285) {
+    http_response_code(422);
+    exit('Payslip exceeds one A4 page.');
+}
+
 while (ob_get_level() > 0) ob_end_clean();
-$safeName = preg_replace('/[^A-Za-z0-9_-]/','_', (string)($payroll['full_name'] ?? 'Employee'));
-$pdf->Output('I','Payslip_'.$safeName.'_'.$selectedMonth.'.pdf');
+
+$safeName = preg_replace(
+    '/[^A-Za-z0-9_-]/',
+    '_',
+    (string)($payroll['full_name'] ?? 'Employee')
+);
+
+$pdf->Output('I', 'Payslip_' . $safeName . '_' . $selectedMonth . '.pdf');
 exit;

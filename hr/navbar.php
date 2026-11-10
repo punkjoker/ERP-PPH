@@ -360,11 +360,16 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <i class="fa-solid fa-user-shield"></i>
             <span>Create Staff Account</span>
         </a>
+        <a href="applicants.php" class="hr-nav-link">
+            <i class="fa-solid fa-user-plus"></i>
+            <span>Applicants</span>
+        </a>    
 
         <a href="short_listed.php" class="hr-nav-link">
             <i class="fa-solid fa-user-check"></i>
             <span>Shortlisted Candidates</span>
         </a>
+        
 
 
         <p class="hr-nav-heading">Attendance & Welfare</p>
@@ -484,6 +489,15 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     <i class="fa-solid fa-chart-line"></i>
     <span>SACCO Reports</span>
 </a>
+<a href="pension_management.php" class="hr-nav-link">
+    <i class="fa-solid fa-piggy-bank"></i>
+    <span>Pension Management</span>
+        </a>
+        <a href="employer_details.php" class="hr-nav-link">
+            <i class="fa-solid fa-building"></i>
+            <span>Employer Details</span>
+        </a>
+    
 
         <a href="manage_expenses.php" class="hr-nav-link">
             <i class="fa-solid fa-wallet"></i>
@@ -540,7 +554,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         </a>
 
         <p class="text-center text-slate-600 text-xs mt-3">
-            Lynntech Manager V1.2
+            Lynntech Manager V1.4
         </p>
     </div>
 

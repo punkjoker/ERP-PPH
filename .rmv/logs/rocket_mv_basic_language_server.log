@@ -1,0 +1,6 @@
+2026-11-10 09:35:53.668 [pool-3-thread-1] INFO  com.rs.mv.mvvs.client.catalog.from.scan.CurrentPathScanner - [client:400205]scan file in current open file directory(C:/xampp/htdocs/LYNNTECH_MNGMENT/hr)
+2026-11-10 09:38:34.360 [pool-3-thread-1] INFO  com.rs.mv.mvvs.client.catalog.from.scan.CurrentPathScanner - [client:400205]scan file in current open file directory(C:/xampp/htdocs/LYNNTECH_MNGMENT/hr)
+2026-11-10 09:38:36.783 [pool-3-thread-1] INFO  com.rs.mv.mvvs.client.catalog.from.scan.CurrentPathScanner - [client:400205]scan file in current open file directory(C:/xampp/htdocs/LYNNTECH_MNGMENT/hr)
+2026-11-10 09:44:08.719 [pool-3-thread-1] INFO  com.rs.mv.mvvs.client.catalog.from.scan.CurrentPathScanner - [client:400205]scan file in current open file directory(C:/xampp/htdocs/LYNNTECH_MNGMENT/hr)
+2026-11-10 10:05:55.409 [pool-3-thread-1] INFO  com.rs.mv.mvvs.client.catalog.from.scan.CurrentPathScanner - [client:400205]scan file in current open file directory(C:/xampp/htdocs/LYNNTECH_MNGMENT/hr)
+2026-11-10 13:53:08.573 [pool-3-thread-1] INFO  com.rs.mv.mvvs.client.catalog.from.scan.CurrentPathScanner - [client:400205]scan file in current open file directory(C:/xampp/htdocs/LYNNTECH_MNGMENT/hr)
